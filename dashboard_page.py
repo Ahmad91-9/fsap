@@ -272,6 +272,11 @@ class DashboardPage(StyledWidget):
                 launcher.signals.finished.connect(lambda result: self.on_app_launch_finished(name, result))
                 launcher.signals.error.connect(lambda error: self.on_app_launch_error(name, error))
                 launcher.signals.progress.connect(lambda message: self.on_app_launch_progress(name, message))
+                # Keep overlay until GUI window is actually ready for GUI apps
+                try:
+                    launcher.signals.app_ready.connect(lambda inst, n=name: self.on_launched_app_ready(n))
+                except Exception:
+                    pass
                 
                 debug_log(f"Started universal launcher for {name}")
             else:
@@ -289,15 +294,24 @@ class DashboardPage(StyledWidget):
     
     def on_app_launch_finished(self, app_name: str, result):
         """Handle when app launch is finished"""
-        if self.loading_overlay:
-            self.loading_overlay.hide_loading()
+        # For process-based apps, hide overlay now; for GUI apps, wait for app_ready
+        if result.success and getattr(result, 'process', None):
+            if self.loading_overlay:
+                self.loading_overlay.hide_loading()
         
         if result.success:
             debug_log(f"App {app_name} launched successfully: {result.message}")
             # No popup on successful launch
         else:
             debug_log(f"App {app_name} launch failed: {result.message}")
+            if self.loading_overlay:
+                self.loading_overlay.hide_loading()
             QMessageBox.critical(self, "Launch Failed", f"Failed to launch {app_name}: {result.message}")
+
+    def on_launched_app_ready(self, app_name: str):
+        """Called when a GUI app instance is ready to be shown."""
+        if self.loading_overlay:
+            self.loading_overlay.hide_loading()
     
     def on_app_launch_error(self, app_name: str, error: str):
         """Handle app launch errors"""
