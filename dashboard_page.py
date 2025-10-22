@@ -5,7 +5,7 @@ from PySide6.QtGui import QPixmap
 from styled_widget import StyledWidget
 from loading_widget import LoadingSpinner, LoadingOverlay
 from config import GITHUB_APPS, LOCAL_APPS, get_app_icon
-from all_app_launcher import launch_app, stop_app, is_app_running, app_launcher_manager
+from Universal_launcher import launch_app, stop_app, is_app_running, app_launcher_manager
 from referral_details_window import ReferralDetailsWindow
 from workers import ReferralSyncWorker
 from utils import debug_log
