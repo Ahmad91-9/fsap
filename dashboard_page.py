@@ -294,7 +294,7 @@ class DashboardPage(StyledWidget):
         
         if result.success:
             debug_log(f"App {app_name} launched successfully: {result.message}")
-            QMessageBox.information(self, "App Launched", f"{app_name} is starting up...")
+            # No popup on successful launch
         else:
             debug_log(f"App {app_name} launch failed: {result.message}")
             QMessageBox.critical(self, "Launch Failed", f"Failed to launch {app_name}: {result.message}")
