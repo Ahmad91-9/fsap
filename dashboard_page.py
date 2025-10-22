@@ -12,6 +12,7 @@ from utils import debug_log
 
 class DashboardPage(StyledWidget):
     logout = Signal()
+    membership_expired = Signal()  # Signal to notify main window that membership has expired
 
     def __init__(self):
         super().__init__()
@@ -331,6 +332,13 @@ class DashboardPage(StyledWidget):
         username = self.profile.get("username", "")
         membership = self.profile.get("membership", False)
         membership_expires = self.profile.get("membership_expires", "")
+
+        # Check if membership has expired
+        from utils import is_membership_expired
+        if membership and is_membership_expired(membership, membership_expires):
+            debug_log(f"Membership expired for user {username}, redirecting to membership page")
+            self.membership_expired.emit()
+            return
 
         self.email_label.setText(f"Email: {email}")
         self.username_label.setText(f"Username: {username}")
