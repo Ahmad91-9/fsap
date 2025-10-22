@@ -57,11 +57,12 @@ LOCAL_APPS = [
     ("Spotify Downloader", "[REMOVED_BASE64_IMAGE]", "spotdl_gui_simple.py"),
     ("Archive Downloader", "[REMOVED_BASE64_IMAGE]", "archivedownloader.py"),
     ("Anime Upscaler", "[REMOVED_BASE64_IMAGE]", "Anime_Upscaler.py"),
+    ("PDF Delete_Erase text", "[REMOVED_BASE64_IMAGE]", "pageremoverpdf.py"),
 ]
 
 GITHUB_APPS = [
     ("RBPK Automation App", "[REMOVED_BASE64_IMAGE]", "https://raw.githubusercontent.com/Ahmad91-9/rbpk-script/main/rbpk.py"),
-    ("PDF Delete_Erase text", "[REMOVED_BASE64_IMAGE]", "https://raw.githubusercontent.com/Ahmad91-9/cf/blob/main/pageremoverpdf.py"),
+    
 ]
 
 # Helper getters for external imports
