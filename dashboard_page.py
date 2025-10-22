@@ -252,7 +252,12 @@ class DashboardPage(StyledWidget):
     
     def on_app_clicked(self, name: str, url_or_path: str, is_local: bool):
         """Launch app using universal app launcher."""
-        username = self.profile.get("username", "guest")
+        # Get username from profile, fallback to email if username not available
+        username = self.profile.get("username", "")
+        if not username:
+            username = self.profile.get("email", "guest")
+        
+        debug_log(f"Launching app '{name}' with username: {username}")
         
         try:
             # Check if app is already running
