@@ -260,6 +260,10 @@ class DashboardPage(StyledWidget):
         debug_log(f"Launching app '{name}' with username: {username}")
         
         try:
+            # Clean up any dead apps first
+            from Universal_launcher import cleanup_dead_apps
+            cleanup_dead_apps()
+            
             # Check if app is already running
             if is_app_running(name):
                 QMessageBox.information(self, "App Running", f"{name} is already running!")
@@ -269,8 +273,8 @@ class DashboardPage(StyledWidget):
             if self.loading_overlay:
                 self.loading_overlay.show_loading(f"Launching {name}...")
             
-            # Launch the app using universal launcher
-            launcher = launch_app(name, username)
+            # Launch the app using universal launcher (disable launcher's loader, use embedded one)
+            launcher = launch_app(name, username, show_loader=False)
             
             if launcher:
                 # Connect to launcher signals
@@ -337,6 +341,14 @@ class DashboardPage(StyledWidget):
         
         if self.referral_sync_worker:
             self.referral_sync_worker = None
+    
+    def cleanup_loading_overlay(self):
+        """Clean up the loading overlay and its resources"""
+        try:
+            if self.loading_overlay:
+                self.loading_overlay.cleanup()
+        except Exception as e:
+            debug_log(f"Error cleaning up loading overlay: {e}")
     
     def closeEvent(self, event):
         """Handle close event to cleanup workers"""
