@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QVBoxLayout, QLabel, QPushButton, QWidget, QHBoxLayout, QMessageBox, QMainWindow, QGridLayout, QScrollArea, QSizePolicy
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 import os
 from PySide6.QtGui import QPixmap
 from styled_widget import StyledWidget
@@ -285,7 +285,6 @@ class DashboardPage(StyledWidget):
             def close_popup():
                 msg.close()
             
-            from PySide6.QtCore import QTimer
             QTimer.singleShot(3000, close_popup)
             msg.show()
             
