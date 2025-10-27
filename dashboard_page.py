@@ -243,6 +243,10 @@ class DashboardPage(StyledWidget):
     def setup_loading_overlay(self):
         """Set up the loading overlay for this page"""
         self.loading_overlay = LoadingOverlay(self, "Processing...")
+        # Add timeout timer for heavy apps
+        self.loading_timeout = QTimer()
+        self.loading_timeout.timeout.connect(self._on_loading_timeout)
+        self.loading_timeout.setSingleShot(True)
     
     def resizeEvent(self, event):
         """Handle resize events to properly position loading overlay"""
@@ -269,11 +273,23 @@ class DashboardPage(StyledWidget):
                 QMessageBox.information(self, "App Running", f"{name} is already running!")
                 return
             
-            # Show loading overlay
-            if self.loading_overlay:
-                self.loading_overlay.show_loading(f"Launching {name}...")
+            # Show popup message instead of loading overlay
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Launching App")
+            msg.setText(f"{name} is being launched please wait")
+            msg.setIcon(QMessageBox.Information)
+            msg.setStandardButtons(QMessageBox.NoButton)  # No buttons
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
             
-            # Launch the app using universal launcher (disable launcher's loader, use embedded one)
+            # Auto-close after 3 seconds
+            def close_popup():
+                msg.close()
+            
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(3000, close_popup)
+            msg.show()
+            
+            # Launch the app using universal launcher (enable popup in launcher)
             launcher = launch_app(name, username, show_loader=False)
             
             if launcher:
@@ -281,7 +297,7 @@ class DashboardPage(StyledWidget):
                 launcher.signals.finished.connect(lambda result: self.on_app_launch_finished(name, result))
                 launcher.signals.error.connect(lambda error: self.on_app_launch_error(name, error))
                 launcher.signals.progress.connect(lambda message: self.on_app_launch_progress(name, message))
-                # Keep overlay until GUI window is actually ready for GUI apps
+                # Connect app_ready for GUI apps
                 try:
                     launcher.signals.app_ready.connect(lambda inst, n=name: self.on_launched_app_ready(n))
                 except Exception:
@@ -289,50 +305,36 @@ class DashboardPage(StyledWidget):
                 
                 debug_log(f"Started universal launcher for {name}")
             else:
-                # Hide loading overlay on failure
-                if self.loading_overlay:
-                    self.loading_overlay.hide_loading()
-                QMessageBox.warning(self, "Launch Failed", f"Could not launch {name}")
+                debug_log(f"Failed to launch {name} - launcher returned None")
+                QMessageBox.critical(self, "Launch Failed", f"Could not launch {name}. The app may not be available or there was an error.")
                 
         except Exception as e:
-            # Hide loading overlay on error
-            if self.loading_overlay:
-                self.loading_overlay.hide_loading()
             debug_log(f"Error launching {name}: {e}")
             QMessageBox.critical(self, "Launch Error", f"Failed to launch {name}: {str(e)}")
     
     def on_app_launch_finished(self, app_name: str, result):
         """Handle when app launch is finished"""
-        # For process-based apps, hide overlay now; for GUI apps, wait for app_ready
-        if result.success and getattr(result, 'process', None):
-            if self.loading_overlay:
-                self.loading_overlay.hide_loading()
-        
         if result.success:
             debug_log(f"App {app_name} launched successfully: {result.message}")
-            # No popup on successful launch
         else:
             debug_log(f"App {app_name} launch failed: {result.message}")
-            if self.loading_overlay:
-                self.loading_overlay.hide_loading()
             QMessageBox.critical(self, "Launch Failed", f"Failed to launch {app_name}: {result.message}")
 
     def on_launched_app_ready(self, app_name: str):
         """Called when a GUI app instance is ready to be shown."""
-        if self.loading_overlay:
-            self.loading_overlay.hide_loading()
+        debug_log(f"App {app_name} is ready")
+
+    def _on_loading_timeout(self):
+        """Handle loading timeout for heavy apps"""
+        debug_log("Loading timeout reached")
     
     def on_app_launch_error(self, app_name: str, error: str):
         """Handle app launch errors"""
-        if self.loading_overlay:
-            self.loading_overlay.hide_loading()
         debug_log(f"App {app_name} launch error: {error}")
         QMessageBox.critical(self, "Launch Error", f"Error launching {app_name}: {error}")
     
     def on_app_launch_progress(self, app_name: str, message: str):
         """Handle app launch progress updates"""
-        if self.loading_overlay:
-            self.loading_overlay.show_loading(f"Launching {app_name}... {message}")
         debug_log(f"App {app_name} progress: {message}")
 
     def cleanup_workers(self):
