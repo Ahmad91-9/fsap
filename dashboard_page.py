@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QVBoxLayout, QLabel, QPushButton, QWidget, QHBoxLayout, QMessageBox, QMainWindow, QGridLayout, QScrollArea, QSizePolicy
+from PySide6.QtWidgets import QVBoxLayout, QLabel, QPushButton, QWidget, QHBoxLayout, QMessageBox, QMainWindow, QGridLayout, QScrollArea, QSizePolicy, QDialog
 from PySide6.QtCore import Qt, Signal, QTimer
 import os
 from PySide6.QtGui import QPixmap
@@ -274,19 +274,30 @@ class DashboardPage(StyledWidget):
                 return
             
             # Show popup message instead of loading overlay
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Launching App")
-            msg.setText(f"{name} is being launched please wait")
-            msg.setIcon(QMessageBox.Information)
-            msg.setStandardButtons(QMessageBox.NoButton)  # No buttons
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+            popup = QDialog(self)
+            popup.setWindowTitle("Launching App")
+            popup.setModal(False)  # Non-modal so it doesn't block
+            popup.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+            
+            layout = QVBoxLayout(popup)
+            label = QLabel(f"{name} is being launched please wait")
+            label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(label)
+            
+            popup.resize(300, 100)
+            
+            # Show the popup
+            popup.show()
             
             # Auto-close after 3 seconds
             def close_popup():
-                msg.close()
+                try:
+                    popup.accept()
+                    popup.deleteLater()
+                except Exception as e:
+                    debug_log(f"Error closing popup: {e}")
             
             QTimer.singleShot(3000, close_popup)
-            msg.show()
             
             # Launch the app using universal launcher (enable popup in launcher)
             launcher = launch_app(name, username, show_loader=False)
