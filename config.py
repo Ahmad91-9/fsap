@@ -244,10 +244,11 @@ _TEMP_SIGNUPS = []  # list of tuples (idToken, localId)
 
 def monthly_reward_on_a_successful_referral():
     """Returns the monthly reward amount for a successful referral"""
-    return 60
+    return 80
 
 def weekly_reward_on_a_successful_referral():
     """Returns the weekly reward amount for a successful referral"""
 
 
     return 20
+
