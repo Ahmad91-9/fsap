@@ -62,15 +62,16 @@ class LoginPage(StyledWidget):
 
         
         # Safe existence check with 8-space indentation
-                if image_path and image_path.exists():
-                    icon = QIcon(str(image_path))
-                    pixmap = icon.pixmap(150, 150)  # pick best resolution from .ico
-                    if pixmap.isNull():
-                        image_label.setText("Invalid image")
-                    else:
-                        image_label.setPixmap(pixmap)
-                else:
-                    image_label.setText("Image not found")
+        # Safe existence check with 8-space indentation
+        if image_path and image_path.exists():
+            icon = QIcon(str(image_path))
+            pixmap = icon.pixmap(150, 150)  # pick best resolution from .ico
+            if pixmap.isNull():
+                image_label.setText("Invalid image")
+            else:
+                image_label.setPixmap(pixmap)
+        else:
+            image_label.setText("Image not found")
 
         frame_layout = QVBoxLayout(image_frame)
         frame_layout.setContentsMargins(0, 0, 0, 0)
@@ -229,6 +230,7 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
 
 
 
