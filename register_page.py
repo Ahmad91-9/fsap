@@ -227,7 +227,7 @@ class RegisterPage(StyledWidget):
         """Set the loading state of the registration form"""
         form_elements = [
             self.username_input, self.email_input, self.password_input,
-            self.confirm_input, self.referral_input, self.rbpk_accenture_input,
+            self.confirm_input, self.referral_input,
             self.show_pass, self.get_code_btn, self.verify_btn, self.register_btn, self.login_link
         ]
         
@@ -246,7 +246,6 @@ class RegisterPage(StyledWidget):
             self.password_input.setEnabled(True)
             self.confirm_input.setEnabled(True)
             self.referral_input.setEnabled(True)
-            self.rbpk_accenture_input.setEnabled(True)
             self.show_pass.setEnabled(True)
             self.login_link.setEnabled(True)
             
@@ -335,7 +334,7 @@ class RegisterPage(StyledWidget):
         user_referral_code = generate_referral_code(user_id=self._local_id)
         username = self.username_input.text().strip()
         email = self.email_input.text().strip()
-        rbpk_accenture_username = self.rbpk_accenture_input.text().strip()
+        
 
         try:
             import time
@@ -517,6 +516,7 @@ class ReferralValidationWorker(QThread):
             debug_log(f"Exception in ReferralValidationWorker: {e}")
 
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
+
 
 
 
