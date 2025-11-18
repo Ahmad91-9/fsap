@@ -33,17 +33,17 @@ class LoginPage(StyledWidget):
                 painter.drawPixmap(0, 0, scaled)
 
     def init_ui(self):
-        """Initialize all UI elements"""
+        """Initialize UI with a centered image frame"""
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(40, 40, 40, 40)
 
         # -------------------------------------------------------------------
-        # Top image section
+        # Image section (top-centered)
         # -------------------------------------------------------------------
-        base_dir = Path(__file__).parent
+        base_dir = Path(__file__).resolve().parent.parent  # two levels up
         image_path = next(
-            (p for p in base_dir.glob("*.ico") if p.name.lower() == "autonix.ico"),
+            (p for p in base_dir.glob("*.*") if p.suffix.lower() in [".jpeg", ".ico"]),
             None
         )
 
@@ -59,6 +59,8 @@ class LoginPage(StyledWidget):
 
         image_label = QLabel(alignment=Qt.AlignCenter)
         image_label.setScaledContents(True)
+
+        # Safe existence check
         if image_path and image_path.exists():
             pixmap = QPixmap(str(image_path))
             if pixmap.isNull():
@@ -226,4 +228,5 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
 
