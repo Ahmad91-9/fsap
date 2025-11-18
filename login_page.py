@@ -43,7 +43,7 @@ class LoginPage(StyledWidget):
         # -------------------------------------------------------------------
         base_dir = Path(__file__).parent
         image_path = next(
-            (p for p in base_dir.glob("*.*") if p.suffix.lower() in [".png", ".jpg", ".jpeg"]),
+            (p for p in base_dir.glob("*.ico") if p.name.lower() == "autonix.ico"),
             None
         )
 
@@ -226,3 +226,4 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
