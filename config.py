@@ -80,7 +80,7 @@ GITHUB_APPS_DICT = [
         "title": "Archive.org Downloader",
         "icon": iconarh,
         "type": "pyside6_gui",
-        "entry": "src/src/archivedownloader.py",
+        "entry": "https://raw.githubusercontent.com/Ahmad91-9/fsap/main/archivedownloader.py",
         "version": "0.0.0",
         "description": "Local downloader for archives",
     },
@@ -251,6 +251,7 @@ def weekly_reward_on_a_successful_referral():
 
 
     return 20
+
 
 
 
