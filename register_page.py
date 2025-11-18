@@ -20,6 +20,18 @@ class RegisterPage(StyledWidget):
         self.loading_overlay = None
         self.init_ui()
         self.setup_loading_overlay()
+
+    def paintEvent(self, event):
+        """Draw background image scaled to widget size"""
+        painter = QPainter(self)
+        bg_path = Path(__file__).parent / "autonix_bg.png"
+
+        if bg_path.exists():
+            pix = QPixmap(str(bg_path))
+            if not pix.isNull():
+                scaled = pix.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                painter.drawPixmap(0, 0, scaled)
+
     
     def init_ui(self):
         layout = QVBoxLayout()
@@ -469,4 +481,5 @@ class ReferralValidationWorker(QThread):
                 
         except Exception as e:
             debug_log(f"Exception in ReferralValidationWorker: {e}")
+
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
