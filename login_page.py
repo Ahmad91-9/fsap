@@ -108,7 +108,7 @@ class LoginPage(StyledWidget):
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Email")
         self.user_input.setMinimumHeight(40)
-        self.user_input.setStylesheet("font-size: 18px; font-weight: bold; background: transparent;")
+        self.user_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.user_input)
 
         # Password input
@@ -116,7 +116,7 @@ class LoginPage(StyledWidget):
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setMinimumHeight(40)
-        self.password_input.setStylesheet("font-size: 18px; font-weight: bold; background: transparent;")
+        self.password_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.password_input)
 
         # Show password checkbox
@@ -232,6 +232,7 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
 
 
 
