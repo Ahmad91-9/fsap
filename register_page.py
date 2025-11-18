@@ -38,23 +38,24 @@ class RegisterPage(StyledWidget):
 
     
     def init_ui(self):
-                button_style = """
-            QPushButton {
-                background-color: #007ACC;  /* blue */
-                color: white;
-                border: none;
-                border-radius: 5px;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 8px;
-            }
-            QPushButton:hover {
-                background-color: #005F9E;  /* darker blue on hover */
-            }
-            QPushButton:pressed {
-                background-color: #004C7A;  /* even darker when pressed */
-            }
+        button_style = """
+        QPushButton {
+            background-color: #007ACC;  /* blue */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+            padding: 8px;
+        }
+        QPushButton:hover {
+            background-color: #005F9E;  /* darker blue on hover */
+        }
+        QPushButton:pressed {
+            background-color: #004C7A;  /* even darker when pressed */
+        }
         """
+
 
 
         
@@ -158,6 +159,12 @@ class RegisterPage(StyledWidget):
         self.get_code_btn.setStyleSheet(button_style)
         self.get_code_btn.clicked.connect(self.on_get_code)
         form_layout.addWidget(self.get_code_btn)
+
+        self.verification_status_label = QLabel("")
+        self.verification_status_label.setAlignment(Qt.AlignCenter)
+        self.verification_status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+        self.verification_status_label.setWordWrap(True)
+        form_layout.addWidget(self.verification_status_label)
 
         # Check Email Verification
         self.verify_btn = QPushButton("Check Email Verification")
@@ -511,6 +518,7 @@ class ReferralValidationWorker(QThread):
             debug_log(f"Exception in ReferralValidationWorker: {e}")
 
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
+
 
 
 
