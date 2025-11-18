@@ -351,7 +351,6 @@ class RegisterPage(StyledWidget):
                 "registration_date": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
                 "membership": False,
                 "free_trial_used": False,  # New users haven't used free trial yet
-                "rbpk_accenture_username": rbpk_accenture_username if rbpk_accenture_username else ""
             }
 
             # Create and start worker thread
@@ -518,6 +517,7 @@ class ReferralValidationWorker(QThread):
             debug_log(f"Exception in ReferralValidationWorker: {e}")
 
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
+
 
 
 
