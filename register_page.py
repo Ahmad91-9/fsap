@@ -70,7 +70,7 @@ class RegisterPage(StyledWidget):
         self.back_btn.setMinimumHeight(35)
         self.back_btn.setStyleSheet("""
             QPushButton {
-                background-color: #555555;
+                background-color: #007ACC;
                 color: white;
                 border: none;
                 border-radius: 5px;
@@ -518,6 +518,7 @@ class ReferralValidationWorker(QThread):
             debug_log(f"Exception in ReferralValidationWorker: {e}")
 
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
+
 
 
 
