@@ -71,11 +71,13 @@ class RegisterPage(StyledWidget):
         # Title
         title = QLabel("Create Account")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px; background: transparent;")
         layout.addWidget(title)
         
         # Form container
         form_container = QWidget()
+        form_container.setStyleSheet("background: transparent;")
+        form_container.setAttribute(Qt.WA_TranslucentBackground)
         form_layout = QVBoxLayout(form_container)
         form_layout.setSpacing(15)
         
@@ -83,12 +85,14 @@ class RegisterPage(StyledWidget):
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("Username")
         self.username_input.setMinimumHeight(40)
+        self.username_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.username_input)
         
         # Email input
         self.email_input = QLineEdit()
         self.email_input.setPlaceholderText("Email")
         self.email_input.setMinimumHeight(40)
+        self.email_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.email_input)
         
         # Password input
@@ -96,6 +100,7 @@ class RegisterPage(StyledWidget):
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setMinimumHeight(40)
+        self.password_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.password_input)
         
         # Confirm password input
@@ -103,19 +108,21 @@ class RegisterPage(StyledWidget):
         self.confirm_input.setPlaceholderText("Confirm Password")
         self.confirm_input.setEchoMode(QLineEdit.Password)
         self.confirm_input.setMinimumHeight(40)
+        self.confirm_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.confirm_input)
 
         # Referral code input (optional) - FIXED REFERRAL SYSTEM
         self.referral_input = QLineEdit()
         self.referral_input.setPlaceholderText("Enter Referral Code (Optional)")
         self.referral_input.setMinimumHeight(40)
+        self.referral_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.referral_input)
 
         # RBPK-Accenture username input (optional)
-        self.rbpk_accenture_input = QLineEdit()
-        self.rbpk_accenture_input.setPlaceholderText("RBPK-Accenture Username (Optional)")
-        self.rbpk_accenture_input.setMinimumHeight(40)
-        form_layout.addWidget(self.rbpk_accenture_input)
+        #self.rbpk_accenture_input = QLineEdit()
+        #self.rbpk_accenture_input.setPlaceholderText("RBPK-Accenture Username (Optional)")
+        #self.rbpk_accenture_input.setMinimumHeight(40)
+        #form_layout.addWidget(self.rbpk_accenture_input)
         
         
         # Show password checkbox
@@ -486,5 +493,6 @@ class ReferralValidationWorker(QThread):
             debug_log(f"Exception in ReferralValidationWorker: {e}")
 
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
+
 
 
