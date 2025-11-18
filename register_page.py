@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QVBoxLayout, QLabel, QLineEdit, QPushButton, QCheckBox, QWidget, QHBoxLayout, QMessageBox
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, Signal, QThread, QRect
+from PySide6.QtGui import QIcon, QPixmap, QPainter
 from styled_widget import StyledWidget
 from loading_widget import LoadingOverlay, LoadingSpinner
 from config import _TEMP_SIGNUPS
@@ -483,3 +484,4 @@ class ReferralValidationWorker(QThread):
             debug_log(f"Exception in ReferralValidationWorker: {e}")
 
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
+
