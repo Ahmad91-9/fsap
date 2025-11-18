@@ -22,16 +22,15 @@ class LoginPage(StyledWidget):
         self.setup_loading_overlay()
 
     def init_ui(self):
-                # --------------------------------------------------------------
+        # --------------------------------------------------------------
         # Set background image for the login page
         # --------------------------------------------------------------
-        base_dir = Path(__file__).resolve().parent.parent
-        bg_path = base_dir / "assets" / "autonix_bg.png"
+        bg_path = os.path.join(sys.path[0], "autonix_bg.png")
 
-        if bg_path.exists():
+        if os.path.exists(bg_path):
             self.setStyleSheet(f"""
                 LoginPage {{
-                    background-image: url("{bg_path.as_posix()}");
+                    background-image: url("{bg_path.replace('\\', '/')}");
                     background-repeat: no-repeat;
                     background-position: center;
                     background-size: cover;
@@ -39,6 +38,7 @@ class LoginPage(StyledWidget):
             """)
         else:
             print("Background image not found:", bg_path)
+
 
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -242,4 +242,5 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
 
