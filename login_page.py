@@ -58,18 +58,19 @@ class LoginPage(StyledWidget):
         """)
 
         image_label = QLabel(alignment=Qt.AlignCenter)
-        image_label.setScaledContents(True)
+        image_label.setScaledContents(False)
 
-        # Safe existence check
-        if image_path and image_path.exists():
-            pixmap = QPixmap(str(image_path))
-            if pixmap.isNull():
-                image_label.setText("Invalid image")
-            else:
-                scaled = pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                image_label.setPixmap(scaled)
-        else:
-            image_label.setText("Image not found")
+        
+        # Safe existence check with 8-space indentation
+                if image_path and image_path.exists():
+                    icon = QIcon(str(image_path))
+                    pixmap = icon.pixmap(150, 150)  # pick best resolution from .ico
+                    if pixmap.isNull():
+                        image_label.setText("Invalid image")
+                    else:
+                        image_label.setPixmap(pixmap)
+                else:
+                    image_label.setText("Image not found")
 
         frame_layout = QVBoxLayout(image_frame)
         frame_layout.setContentsMargins(0, 0, 0, 0)
@@ -228,5 +229,6 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
 
 
