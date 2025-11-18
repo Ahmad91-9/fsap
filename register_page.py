@@ -10,6 +10,7 @@ from utils import validate_referral_code, debug_log, generate_referral_code
 from pathlib import Path
 
 
+
 class RegisterPage(StyledWidget):
     start_signup = Signal(str, str)  # email, password
     verify_email = Signal(str, str)  # idToken, localId
@@ -37,6 +38,26 @@ class RegisterPage(StyledWidget):
 
     
     def init_ui(self):
+                button_style = """
+            QPushButton {
+                background-color: #007ACC;  /* blue */
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 8px;
+            }
+            QPushButton:hover {
+                background-color: #005F9E;  /* darker blue on hover */
+            }
+            QPushButton:pressed {
+                background-color: #004C7A;  /* even darker when pressed */
+            }
+        """
+
+
+        
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(40, 40, 40, 40)
@@ -130,30 +151,27 @@ class RegisterPage(StyledWidget):
         self.show_pass.toggled.connect(self.toggle_passwords)
         form_layout.addWidget(self.show_pass)
         
-        # Send verification email button
+
+        # Send Verification Email
         self.get_code_btn = QPushButton("Send Verification Email")
         self.get_code_btn.setMinimumHeight(40)
+        self.get_code_btn.setStyleSheet(button_style)
         self.get_code_btn.clicked.connect(self.on_get_code)
         form_layout.addWidget(self.get_code_btn)
-        
-        # Verification status label
-        self.verification_status_label = QLabel("")
-        self.verification_status_label.setAlignment(Qt.AlignCenter)
-        self.verification_status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-        self.verification_status_label.setWordWrap(True)
-        form_layout.addWidget(self.verification_status_label)
-        
-        # Check verification button  
+
+        # Check Email Verification
         self.verify_btn = QPushButton("Check Email Verification")
         self.verify_btn.setMinimumHeight(40)
         self.verify_btn.setEnabled(False)
+        self.verify_btn.setStyleSheet(button_style)
         self.verify_btn.clicked.connect(self.on_verify_clicked)
         form_layout.addWidget(self.verify_btn)
-        
-        # Register button
+
+        # Complete Registration
         self.register_btn = QPushButton("Complete Registration")
         self.register_btn.setMinimumHeight(45)
         self.register_btn.setEnabled(False)
+        self.register_btn.setStyleSheet(button_style)
         self.register_btn.clicked.connect(self.on_register_clicked)
         form_layout.addWidget(self.register_btn)
         
@@ -493,6 +511,7 @@ class ReferralValidationWorker(QThread):
             debug_log(f"Exception in ReferralValidationWorker: {e}")
 
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
+
 
 
 
