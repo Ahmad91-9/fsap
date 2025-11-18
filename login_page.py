@@ -89,7 +89,7 @@ class LoginPage(StyledWidget):
         # -------------------------------------------------------------------
         title = QLabel("Welcome to Autonix")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px; background: transparent;")
         layout.addWidget(title)
 
         subtitle = QLabel("Please login to your Autonix account")
@@ -230,6 +230,7 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
 
 
 
