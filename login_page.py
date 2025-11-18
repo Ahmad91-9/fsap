@@ -101,27 +101,17 @@ class LoginPage(StyledWidget):
         # Login form
         # Form container
         form_container = QWidget()
-        form_container.setStyleSheet("background: transparent;")  # Make container transparent
+        form_container.setStyleSheet("background: transparent;")
+        form_container.setAttribute(Qt.WA_TranslucentBackground)
         form_layout = QVBoxLayout(form_container)
         form_layout.setSpacing(15)
 
-        # Email input
+
+                # Email input
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Email")
         self.user_input.setMinimumHeight(40)
-        self.user_input.setStyleSheet("""
-                QLineEdit {
-                    font-size: 18px;
-                    font-weight: bold;
-                    background: transparent;
-                    border: 1px solid #ccc;  /* optional border */
-                    color: white;             /* text color */
-                    padding: 5px;
-                }
-                QLineEdit::placeholder {
-                    color: #CCCCCC;           /* placeholder color */
-                }
-        """)
+        self.user_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.user_input)
 
         # Password input
@@ -129,20 +119,15 @@ class LoginPage(StyledWidget):
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setMinimumHeight(40)
-        self.password_input.setStyleSheet("""
-                QLineEdit {
-                    font-size: 18px;
-                    font-weight: bold;
-                    background: transparent;
-                    border: 1px solid #ccc;
-                    color: white;
-                    padding: 5px;
-                }
-                QLineEdit::placeholder {
-                    color: #CCCCCC;
-                }
-        """)
+        self.password_input.setStyleSheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.password_input)
+
+        # Show password checkbox
+        self.show_pass = QCheckBox("Show password")
+        self.show_pass.toggled.connect(self.toggle_password)
+        form_layout.addWidget(self.show_pass)
+
+        layout.addWidget(form_container)
 
 
         # -------------------------------------------------------------------
