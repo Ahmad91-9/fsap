@@ -94,7 +94,7 @@ class LoginPage(StyledWidget):
 
         subtitle = QLabel("Please login to your Autonix account")
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("font-size: 16px; color: #CCCCCC; margin-bottom: 20px;")
+        subtitle.setStyleSheet("font-size: 16px; color: #CCCCCC; margin-bottom: 20px; background: transparent;")
         layout.addWidget(subtitle)
 
         # -------------------------------------------------------------------
@@ -108,6 +108,7 @@ class LoginPage(StyledWidget):
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Email")
         self.user_input.setMinimumHeight(40)
+        self.user_input.setStylesheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.user_input)
 
         # Password input
@@ -115,6 +116,7 @@ class LoginPage(StyledWidget):
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setMinimumHeight(40)
+        self.password_input.setStylesheet("font-size: 18px; font-weight: bold; background: transparent;")
         form_layout.addWidget(self.password_input)
 
         # Show password checkbox
@@ -230,6 +232,7 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
 
 
 
