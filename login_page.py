@@ -21,7 +21,22 @@ class LoginPage(StyledWidget):
         self.init_ui()
         self.setup_loading_overlay()
 
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        bg_path = os.path.join(sys.path[0], "autonix_bg.png")
+
+        if os.path.exists(bg_path):
+            pix = QPixmap(bg_path)
+            if not pix.isNull():
+                scaled = pix.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                painter.drawPixmap(0, 0, scaled)
+
+    
+
     def init_ui(self):
+        # --------------------------------------------------------------
+        # Set background image for the login page
+        # --------------------------------------------------------------
         # --------------------------------------------------------------
         # Set background image for the login page
         # --------------------------------------------------------------
@@ -33,11 +48,11 @@ class LoginPage(StyledWidget):
                     background-image: url("{bg_path.replace('\\', '/')}");
                     background-repeat: no-repeat;
                     background-position: center;
-                    background-size: cover;
                 }}
             """)
         else:
             print("Background image not found:", bg_path)
+
 
 
         layout = QVBoxLayout()
@@ -242,5 +257,6 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
+
 
 
