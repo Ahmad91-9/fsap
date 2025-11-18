@@ -102,7 +102,7 @@ GITHUB_APPS_DICT = [
         "title": "PDF Editor Pro",
         "icon": iconopdf_d_e,
         "type": "local",
-        "entry": "https://raw.githubusercontent.com/Ahmad91-9/fsap/main/pageremoverpdf.py",
+        "entry": "src/src/pageremoverpdf.py",
         "description": "Remove text from PDF pages",
     },
     {
@@ -251,4 +251,5 @@ def weekly_reward_on_a_successful_referral():
 
 
     return 20
+
 
