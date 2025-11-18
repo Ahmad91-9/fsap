@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QMessageBox, QApplication, QMainWindow, QFrame
 )
 from PySide6.QtCore import Qt, Signal, QRect
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QIcon, QPixmap, QPainter
 from styled_widget import StyledWidget
 from loading_widget import LoadingOverlay
 import sys
@@ -22,47 +22,26 @@ class LoginPage(StyledWidget):
         self.setup_loading_overlay()
 
     def paintEvent(self, event):
+        """Draw background image scaled to widget size"""
         painter = QPainter(self)
-        bg_path = os.path.join(sys.path[0], "autonix_bg.png")
+        bg_path = Path(__file__).parent / "autonix_bg.png"
 
-        if os.path.exists(bg_path):
-            pix = QPixmap(bg_path)
+        if bg_path.exists():
+            pix = QPixmap(str(bg_path))
             if not pix.isNull():
                 scaled = pix.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
                 painter.drawPixmap(0, 0, scaled)
 
-    
-
     def init_ui(self):
-        # --------------------------------------------------------------
-        # Set background image for the login page
-        # --------------------------------------------------------------
-        # --------------------------------------------------------------
-        # Set background image for the login page
-        # --------------------------------------------------------------
-        bg_path = os.path.join(sys.path[0], "autonix_bg.png")
-
-        if os.path.exists(bg_path):
-            self.setStyleSheet(f"""
-                LoginPage {{
-                    background-image: url("{bg_path.replace('\\', '/')}");
-                    background-repeat: no-repeat;
-                    background-position: center;
-                }}
-            """)
-        else:
-            print("Background image not found:", bg_path)
-
-
-
+        """Initialize all UI elements"""
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(40, 40, 40, 40)
 
         # -------------------------------------------------------------------
-        # Image section (top-left corner)
+        # Top image section
         # -------------------------------------------------------------------
-        base_dir = Path(__file__).resolve().parent.parent
+        base_dir = Path(__file__).parent
         image_path = next(
             (p for p in base_dir.glob("*.*") if p.suffix.lower() in [".png", ".jpg", ".jpeg"]),
             None
@@ -80,7 +59,7 @@ class LoginPage(StyledWidget):
 
         image_label = QLabel(alignment=Qt.AlignCenter)
         image_label.setScaledContents(True)
-        if image_path.exists():
+        if image_path and image_path.exists():
             pixmap = QPixmap(str(image_path))
             if pixmap.isNull():
                 image_label.setText("Invalid image")
@@ -94,7 +73,7 @@ class LoginPage(StyledWidget):
         frame_layout.setContentsMargins(0, 0, 0, 0)
         frame_layout.addWidget(image_label)
 
-        # Center image at top
+        # Center image horizontally
         top_layout = QHBoxLayout()
         top_layout.addStretch()
         top_layout.addWidget(image_frame, alignment=Qt.AlignCenter)
@@ -102,20 +81,21 @@ class LoginPage(StyledWidget):
         layout.addLayout(top_layout)
 
         # -------------------------------------------------------------------
-
-        # Title
+        # Title and subtitle
+        # -------------------------------------------------------------------
         title = QLabel("Welcome to Autonix")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px;")
         layout.addWidget(title)
 
-        # Subtitle
         subtitle = QLabel("Please login to your Autonix account")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setStyleSheet("font-size: 16px; color: #CCCCCC; margin-bottom: 20px;")
         layout.addWidget(subtitle)
 
-        # Form container
+        # -------------------------------------------------------------------
+        # Login form
+        # -------------------------------------------------------------------
         form_container = QWidget()
         form_layout = QVBoxLayout(form_container)
         form_layout.setSpacing(15)
@@ -140,13 +120,17 @@ class LoginPage(StyledWidget):
 
         layout.addWidget(form_container)
 
+        # -------------------------------------------------------------------
         # Login button
+        # -------------------------------------------------------------------
         self.login_btn = QPushButton("Login")
         self.login_btn.setMinimumHeight(45)
         self.login_btn.clicked.connect(self.on_login_clicked)
         layout.addWidget(self.login_btn)
 
+        # -------------------------------------------------------------------
         # Register link
+        # -------------------------------------------------------------------
         register_link_layout = QHBoxLayout()
         register_link_layout.addStretch()
         self.register_link = QPushButton("Create an Autonix account")
@@ -176,7 +160,7 @@ class LoginPage(StyledWidget):
         self.loading_overlay = LoadingOverlay(self, "Logging in to Autonix...")
 
     def resizeEvent(self, event):
-        """Handle resize events to properly position loading overlay"""
+        """Resize overlay when widget resizes"""
         super().resizeEvent(event)
         if self.loading_overlay:
             self.loading_overlay.resize(self.size())
@@ -185,7 +169,7 @@ class LoginPage(StyledWidget):
         self.password_input.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password)
 
     def on_login_clicked(self):
-        """Enhanced login with loading indicators and disabled form"""
+        """Handle login button click"""
         email = self.user_input.text().strip()
         password = self.password_input.text().strip()
 
@@ -193,61 +177,46 @@ class LoginPage(StyledWidget):
             QMessageBox.warning(self, "Input Required", "Please enter email and password.")
             return
 
-        # Show loading state
         self.set_loading_state(True)
-
-        # Emit login request
         self.request_login.emit(email, password)
 
     def set_loading_state(self, loading):
-        """Set the loading state of the login form"""
-        if loading:
-            # Disable form elements
-            self.user_input.setEnabled(False)
-            self.password_input.setEnabled(False)
-            self.login_btn.setEnabled(False)
-            self.register_link.setEnabled(False)
-            self.show_pass.setEnabled(False)
+        """Enable/disable form during login"""
+        self.user_input.setEnabled(not loading)
+        self.password_input.setEnabled(not loading)
+        self.login_btn.setEnabled(not loading)
+        self.register_link.setEnabled(not loading)
+        self.show_pass.setEnabled(not loading)
 
-            # Show loading overlay
-            if self.loading_overlay:
+        if self.loading_overlay:
+            if loading:
                 self.loading_overlay.show_loading("Authenticating with Autonix...")
-        else:
-            # Re-enable form elements
-            self.user_input.setEnabled(True)
-            self.password_input.setEnabled(True)
-            self.login_btn.setEnabled(True)
-            self.register_link.setEnabled(True)
-            self.show_pass.setEnabled(True)
-
-            # Hide loading overlay
-            if self.loading_overlay:
+            else:
                 self.loading_overlay.hide_loading()
 
     def login_completed(self, success=True):
-        """Call this when login operation is completed"""
+        """Call after login finishes"""
         self.set_loading_state(False)
 
 
 # ---------------------------------------------------------------------------
-# Main launcher (ensures icon shows in top-left corner and on taskbar)
+# Main launcher
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    
-    # Set icon using system-independent path
-    icon_path = os.path.join(Path(__file__).parent.parent, 'autonix.ico')
-    if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))  # Global icon for all windows
+
+    icon_path = Path(__file__).parent / 'autonix.ico'
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
     window = QMainWindow()
     window.setWindowTitle("Autonix Login")
-    if os.path.exists(icon_path):
-        window.setWindowIcon(QIcon(icon_path))  # Shows top-left icon + taskbar
+    if icon_path.exists():
+        window.setWindowIcon(QIcon(str(icon_path)))
     window.setFixedSize(420, 520)
 
-    # Center window on screen
-    screen = app.primaryScreen().geometry()
+    # Center window
+    screen = app.primaryScreen().availableGeometry()
     x = (screen.width() - window.width()) // 2
     y = (screen.height() - window.height()) // 2
     window.setGeometry(QRect(x, y, window.width(), window.height()))
@@ -257,6 +226,3 @@ if __name__ == "__main__":
     window.show()
 
     sys.exit(app.exec())
-
-
-
