@@ -7,6 +7,8 @@ from config import _TEMP_SIGNUPS
 from firebase_client import FirebaseClient
 from thread_workers import RegistrationCompletionWorker
 from utils import validate_referral_code, debug_log, generate_referral_code
+from pathlib import Path
+
 
 class RegisterPage(StyledWidget):
     start_signup = Signal(str, str)  # email, password
@@ -484,4 +486,5 @@ class ReferralValidationWorker(QThread):
             debug_log(f"Exception in ReferralValidationWorker: {e}")
 
             self.finished.emit(False, {"error": f"Exception: {str(e)}"})
+
 
