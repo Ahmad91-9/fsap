@@ -96,7 +96,8 @@ class AnimeUpscaler:
     SUPPORTED_IMAGE_FORMATS = (".png", ".jpg", ".jpeg", ".bmp")
     # Note: MP4 output requires a compatible codec (e.g., 'mp4v' or 'XVID' for VideoWriter)
     SUPPORTED_VIDEO_FORMATS = (".mp4", ".avi", ".mkv", ".mov")
-    SUPPORTED_FORMATS = SUPPORTed_IMAGE_FORMATS + SUPPORTED_VIDEO_FORMATS
+    # FIX: Corrected typo from SUPPORTed_IMAGE_FORMATS to SUPPORTED_IMAGE_FORMATS
+    SUPPORTED_FORMATS = SUPPORTED_IMAGE_FORMATS + SUPPORTED_VIDEO_FORMATS
 
     MODEL_FILENAME = "RealESRGAN_x4plus_anime_6B.pth"  # Just the filename, path will be auto-detected
     
