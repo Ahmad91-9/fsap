@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Callable, Optional
 import contextlib
 import io
+import numpy as np
 
 # Deliberately do NOT import RRDBNet / RealESRGANer at module import time --
 # they will be imported lazily inside _load_model to avoid heavy work on UI startup.
@@ -95,9 +96,12 @@ class AnimeUpscaler:
     SUPPORTED_IMAGE_FORMATS = (".png", ".jpg", ".jpeg", ".bmp")
     # Note: MP4 output requires a compatible codec (e.g., 'mp4v' or 'XVID' for VideoWriter)
     SUPPORTED_VIDEO_FORMATS = (".mp4", ".avi", ".mkv", ".mov")
-    SUPPORTED_FORMATS = SUPPORTED_IMAGE_FORMATS + SUPPORTED_VIDEO_FORMATS
+    SUPPORTED_FORMATS = SUPPORTed_IMAGE_FORMATS + SUPPORTED_VIDEO_FORMATS
 
     MODEL_FILENAME = "RealESRGAN_x4plus_anime_6B.pth"  # Just the filename, path will be auto-detected
+    
+    # Safe maximum batch size for video processing (30 is a good compromise for VRAM and speed)
+    VIDEO_BATCH_SIZE = 30 
 
     # Predefined resolutions (The output will be constrained by these max dimensions)
     RESOLUTIONS = {
@@ -254,8 +258,50 @@ class AnimeUpscaler:
         else:
             raise ValueError("[ERROR] Input path must be a file or a folder.")
 
+    def _process_frame_batch(self, batch_frames: list, out_w: int, out_h: int) -> list[np.ndarray]:
+        """
+        Process a batch of frames on the GPU in a single forward pass (manual batching).
+        NOTE: This bypasses RealESRGANer's tiling logic, meaning all 4x upscaled frames
+              in the batch must fit into VRAM. Use small batch sizes for large frames.
+        """
+        if not batch_frames:
+            return []
+
+        # Lazy imports for required utilities (assuming basicsr is installed)
+        try:
+            from basicsr.utils import img2tensor, tensor2img
+        except Exception:
+            self.log("[ERROR] Cannot import basic utility functions (img2tensor/tensor2img). Video batch processing failed.")
+            raise
+
+        # 1. Convert frames to PyTorch tensor format (B, C, H, W) and move to device
+        tensor_list = []
+        for frame in batch_frames:
+            # img2tensor handles conversion and normalization (BGR->RGB, HWC->CHW, unit8->float)
+            tensor_list.append(img2tensor(frame / 255.0, bgr2rgb=True, float32=True).to(self.device))
+        
+        # Stack into batch tensor: (B, C, H, W)
+        batch_tensor = torch.stack(tensor_list, dim=0)
+
+        output_frames = []
+        # Run model inference in non-gradient mode
+        with torch.no_grad():
+            # Use the underlying RRDBNet model directly for batch inference
+            output_tensor = self.upsampler.model(batch_tensor)
+
+        # 2. Post-process: Convert back to NumPy images (B, H, W, C), denormalize/clip, and resize
+        for single_output_tensor in output_tensor:
+            # Convert back: (C, H, W) -> (H, W, C), RGB -> BGR, float->uint8, clip
+            restored_img = tensor2img(single_output_tensor, rgb2bgr=True)
+            
+            # 3. Resize to target resolution (out_w, out_h)
+            final_img = cv2.resize(restored_img, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+            output_frames.append(final_img)
+
+        return output_frames
+
     def _upscale_file(self, file: Path):
-        """Upscale a single image file to target resolution."""
+        """Upscale a single image file to target resolution (using tiling for safety)."""
         if file.suffix.lower() not in self.SUPPORTED_IMAGE_FORMATS:
             self.log(f"[WARNING] Skipped unsupported file: {file.name}")
             return
@@ -274,11 +320,10 @@ class AnimeUpscaler:
 
             img_height, img_width = img.shape[:2]
             
-            # 1. Upscale 4x with RealESRGAN
+            # 1. Upscale 4x with RealESRGAN (uses tiling internally)
             self.log(f"[INFO] Image size: {img_width}x{img_height}")
             self.log(f"[INFO] Tile size: {self.tile}")
             
-            # Calculate total tiles for progress reporting (if not using library's internal logging)
             total_tiles = self._calculate_tile_count(img_height, img_width)
             self.log(f"[INFO] Total tiles to process: {total_tiles}")
 
@@ -287,9 +332,7 @@ class AnimeUpscaler:
             with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
                 restored, _ = self.upsampler.enhance(img, outscale=4)
 
-            # Log completion of tiling simulation
-            for i in range(1, total_tiles + 1):
-                self.log(f"[PROGRESS] Tile {i}/{total_tiles}")
+            self.log("[INFO] 4x Upscaling complete. Beginning final resize.")
 
             # 2. Resize to fit within chosen target resolution while preserving aspect ratio
             src_h, src_w = restored.shape[:2]
@@ -311,7 +354,7 @@ class AnimeUpscaler:
             self.log(f"[ERROR] Error processing {file.name}: {type(e).__name__}: {e}")
 
     def _upscale_video(self, video_path: Path):
-        """Upscale a single video file to target resolution."""
+        """Upscale a single video file to target resolution using frame batching."""
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
             self.log(f"[ERROR] Failed to open video: {video_path.name}")
@@ -330,10 +373,18 @@ class AnimeUpscaler:
             frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            # Determine batch size: min(FPS, 30) frames for parallel GPU processing
+            # 30 is a safe max to prevent VRAM overflow.
+            batch_size = min(int(fps), self.VIDEO_BATCH_SIZE)
+            if batch_size == 0: # Ensure batch size is at least 1
+                batch_size = 1
+
             self.log(f"[INFO] Input Video: {video_path.name} ({frame_width}x{frame_height}, {fps:.2f} FPS, {frame_count} frames)")
+            self.log(f"[INFO] Upscaling {batch_size} frames in parallel batches for speed.")
+            self.log("[WARNING] Frame batching bypasses tiling and requires enough VRAM.")
 
             # Calculate the constant output resolution based on the 4x size and target size
-            # 4x upscaled frame size:
             src_w, src_h = frame_width * 4, frame_height * 4 
             out_w, out_h = self._calculate_output_size(src_w, src_h)
 
@@ -346,9 +397,7 @@ class AnimeUpscaler:
             
             writer = cv2.VideoWriter(str(out_path), fourcc, fps, (out_w, out_h))
             if not writer.isOpened():
-                # On many systems, the 'mp4v' codec might fail if FFMPEG is not installed correctly.
-                # Try a fallback like 'XVID' which is often more reliable.
-                self.log("[WARNING] Failed to open video writer with 'mp4v'. Trying 'XVID'...")
+                self.log("[WARNING] Failed to open video writer with 'mp4v'. Trying 'XVID' fallback...")
                 fourcc_fallback = cv2.VideoWriter_fourcc(*'XVID')
                 writer = cv2.VideoWriter(str(out_path), fourcc_fallback, fps, (out_w, out_h))
                 
@@ -360,33 +409,45 @@ class AnimeUpscaler:
             self.log(f"[INFO] Output Video: {out_path} ({out_w}x{out_h}, {fps:.2f} FPS). Starting frame processing...")
 
             processed_frames = 0
+            current_batch = []
+            
             # Redirect stdout/stderr to the GUI logger during enhancement
             stream = StreamToLogger(self.log)
-            
+
             while cap.isOpened():
                 ret, frame = cap.read()
-                if not ret:
-                    break
-
-                # 1. Upscale 4x with RealESRGAN
-                with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
-                    # restored is 4x the input frame size
-                    restored, _ = self.upsampler.enhance(frame, outscale=4)
-
-                # 2. Resize the 4x upscaled result (restored) to the constant calculated size (out_w, out_h)
-                final = cv2.resize(restored, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+                if ret:
+                    current_batch.append(frame)
                 
-                writer.write(final)
-                processed_frames += 1
+                # Check if batch is full or if we reached the end of the video stream (and have remaining frames)
+                if len(current_batch) == batch_size or (not ret and current_batch):
+                    
+                    self.log(f"[INFO] Processing batch of {len(current_batch)} frames...")
+                    
+                    # Process the batch
+                    with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
+                        final_frames = self._process_frame_batch(current_batch, out_w, out_h)
+                    
+                    # Write the frames
+                    for final_frame in final_frames:
+                        writer.write(final_frame)
+                        processed_frames += 1
+                        
+                    # Log progress based on frames written
+                    log_interval = max(1, frame_count // 20) # Log every 5% of frames
+                    if processed_frames % log_interval == 0 or processed_frames == frame_count:
+                        self.log(f"[PROGRESS] Processed {processed_frames}/{frame_count} frames ({processed_frames * 100 / frame_count:.1f}%)")
 
-                if processed_frames % 50 == 0 or processed_frames == frame_count:
-                    self.log(f"[PROGRESS] Processed frame {processed_frames}/{frame_count}")
+                    # Reset batch
+                    current_batch = []
+                    
+                if not ret:
+                    break # End of video stream
 
             self.log(f"[SUCCESS] Video processing complete. Total frames written: {processed_frames}")
             self.log(f"[SUCCESS] Saved: {out_path}")
 
         except Exception as e:
-            # Include type + message for easier debugging
             self.log(f"[ERROR] Error processing video {video_path.name}: {type(e).__name__}: {e}")
         finally:
             # Always release resources
@@ -404,7 +465,14 @@ class AnimeUpscaler:
             if suffix in self.SUPPORTED_FORMATS:
                 # Use the unified upscale method which handles file type internally
                 try:
-                    self.upscale() 
+                    # Note: We create a new AnimeUpscaler instance per file in the worker,
+                    # so calling upscale() directly here might double process. 
+                    # Re-implementing the per-file logic here for correctness.
+                    if suffix in self.SUPPORTED_IMAGE_FORMATS:
+                        self._upscale_file(file)
+                    elif suffix in self.SUPPORTED_VIDEO_FORMATS:
+                        self._upscale_video(file)
+
                     processed += 1
                 except Exception as e:
                     self.log(f"[ERROR] Failed to process {file.name} in folder: {e}")
@@ -591,12 +659,10 @@ class AnimeUpscalerApp(QWidget):
     def _show_startup_warning(self):
         QMessageBox.warning(
             self,
-            "Important Notice: Video Support",
+            "Important Notice: Video Batch Processing",
             (
-                "This tool now supports both image and video upscaling (anime style).\n\n"
-                "1. **Video Codec:** The output video is saved as MP4 (using 'mp4v' or 'XVID' codec). If you encounter errors, your OpenCV/FFMPEG installation may lack the necessary codecs.\n"
-                "2. **Performance:** Upscaling video is extremely slow, as every frame is processed.\n"
-                "3. **Memory:** Selecting very high resolutions (e.g., 16K/32K/64K) may still cause crashes due to high memory usage, especially for large image frames or video frames."
+                "Video upscaling is now significantly faster using **GPU batch processing** (up to 30 frames at a time).\n\n"
+                "**WARNING:** This speedup comes at the cost of higher **VRAM usage**. If your video frames are very large or you select a high batch size, you may experience crashes on GPUs with limited memory."
             ),
         )
 
