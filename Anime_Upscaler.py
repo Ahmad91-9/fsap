@@ -89,12 +89,17 @@ class StreamToLogger(io.TextIOBase):
 
 
 class AnimeUpscaler:
-    """Anime Image Upscaler with selectable target resolution (4K / 8K / 16K / 32K / 64K )."""
+    """Anime Image/Video Upscaler with selectable target resolution."""
 
-    SUPPORTED_FORMATS = (".png", ".jpg", ".jpeg", ".bmp")
+    # Supported formats
+    SUPPORTED_IMAGE_FORMATS = (".png", ".jpg", ".jpeg", ".bmp")
+    # Note: MP4 output requires a compatible codec (e.g., 'mp4v' or 'XVID' for VideoWriter)
+    SUPPORTED_VIDEO_FORMATS = (".mp4", ".avi", ".mkv", ".mov")
+    SUPPORTED_FORMATS = SUPPORTED_IMAGE_FORMATS + SUPPORTED_VIDEO_FORMATS
+
     MODEL_FILENAME = "RealESRGAN_x4plus_anime_6B.pth"  # Just the filename, path will be auto-detected
 
-    # Predefined resolutions
+    # Predefined resolutions (The output will be constrained by these max dimensions)
     RESOLUTIONS = {
         "1": (3840, 2160),     # 4K
         "2": (7680, 4320),     # 8K
@@ -116,7 +121,7 @@ class AnimeUpscaler:
         Args:
             input_path (Path): Path to input file or folder
             output_folder (Path): Path to save results
-            target_res (tuple): (width, height) final resolution
+            target_res (tuple): (width, height) final max resolution
             tile (int): Tile size (smaller = less VRAM, safer on T4; try 200–300)
             tile_pad (int): Padding between tiles to avoid seams
         """
@@ -127,6 +132,7 @@ class AnimeUpscaler:
 
         # CUDA check (but allow CPU fallback)
         if torch.cuda.is_available():
+            self._log_to_console("[INFO] CUDA GPU detected, using GPU acceleration.")
             self.device = torch.device("cuda")
         else:
             self._log_to_console("[WARNING] CUDA GPU not detected, using CPU (very slow).")
@@ -134,10 +140,6 @@ class AnimeUpscaler:
 
         self.tile = tile
         self.tile_pad = tile_pad
-
-        # Do NOT load model here if you want very fast UI startup in main thread.
-        # Instead, we'll load it lazily when needed via _load_model which will be called
-        # from the worker thread.
         self.upsampler = None
 
         if not self.input_path.exists():
@@ -166,7 +168,7 @@ class AnimeUpscaler:
             from basicsr.archs.rrdbnet_arch import RRDBNet
             from realesrgan import RealESRGANer
         except Exception as e:
-            raise RuntimeError(f"Failed to import model libraries: {e}")
+            raise RuntimeError(f"Failed to import model libraries: {e}. Check if basicsr and realesrgan are installed.")
 
         model = RRDBNet(
             num_in_ch=3,
@@ -209,6 +211,28 @@ class AnimeUpscaler:
             ascii_text = text.encode("ascii", "replace").decode("ascii")
             print(ascii_text)
 
+    def _calculate_output_size(self, source_w: int, source_h: int) -> tuple[int, int]:
+        """Calculates the final output size based on the 4x upscaled content (source_w, source_h)
+        to fit within the user-defined target resolution (self.target_res) while preserving aspect ratio.
+        """
+        target_w, target_h = self.target_res
+        
+        # Calculate the size to fit the 4x upscaled image (source) within the target size.
+        # This prevents the final image from exceeding the user's resolution cap.
+        scale = min(target_w / source_w, target_h / source_h)
+        out_w = max(1, int(source_w * scale))
+        out_h = max(1, int(source_h * scale))
+
+        # Ensure width and height are even numbers, which is critical for video codecs and best practice for images
+        out_w = out_w // 2 * 2
+        out_h = out_h // 2 * 2
+        
+        if out_w == 0 or out_h == 0:
+            self.log(f"[WARNING] Calculated output size is zero, falling back to 4x size ({source_w}x{source_h}).")
+            return source_w, source_h
+
+        return out_w, out_h
+
     def _calculate_tile_count(self, img_height: int, img_width: int) -> int:
         """Calculate the number of tiles needed for an image."""
         num_tiles_x = (img_width + self.tile - 1) // self.tile
@@ -218,7 +242,13 @@ class AnimeUpscaler:
     def upscale(self):
         """Process file or folder."""
         if self.input_path.is_file():
-            self._upscale_file(self.input_path)
+            suffix = self.input_path.suffix.lower()
+            if suffix in self.SUPPORTED_IMAGE_FORMATS:
+                self._upscale_file(self.input_path)
+            elif suffix in self.SUPPORTED_VIDEO_FORMATS:
+                self._upscale_video(self.input_path)
+            else:
+                self.log(f"[ERROR] Unsupported file format: {self.input_path.name}")
         elif self.input_path.is_dir():
             self._upscale_folder(self.input_path)
         else:
@@ -226,7 +256,7 @@ class AnimeUpscaler:
 
     def _upscale_file(self, file: Path):
         """Upscale a single image file to target resolution."""
-        if file.suffix.lower() not in self.SUPPORTED_FORMATS:
+        if file.suffix.lower() not in self.SUPPORTED_IMAGE_FORMATS:
             self.log(f"[WARNING] Skipped unsupported file: {file.name}")
             return
 
@@ -242,38 +272,35 @@ class AnimeUpscaler:
                 self._load_model()
                 self.log("[INFO] Model loaded.")
 
-            # Calculate total number of tiles for progress display (based on input image)
             img_height, img_width = img.shape[:2]
-            total_tiles = self._calculate_tile_count(img_height, img_width)
-
+            
+            # 1. Upscale 4x with RealESRGAN
             self.log(f"[INFO] Image size: {img_width}x{img_height}")
             self.log(f"[INFO] Tile size: {self.tile}")
+            
+            # Calculate total tiles for progress reporting (if not using library's internal logging)
+            total_tiles = self._calculate_tile_count(img_height, img_width)
             self.log(f"[INFO] Total tiles to process: {total_tiles}")
 
-            # Many libraries print progress to stdout. We'll redirect stdout/stderr
-            # to our GUI logger for the duration of enhance so those messages show up.
+            # Redirect stdout/stderr to the GUI logger during enhancement
             stream = StreamToLogger(self.log)
             with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
-                # Call RealESRGAN enhancement (this will run inside the worker thread)
                 restored, _ = self.upsampler.enhance(img, outscale=4)
 
-            # After enhance, re-log simulated tile completion (if desired)
-            # Note: If the library emitted per-tile messages we already captured them.
-            # Keep a completion loop so the GUI has clear progress lines.
+            # Log completion of tiling simulation
             for i in range(1, total_tiles + 1):
                 self.log(f"[PROGRESS] Tile {i}/{total_tiles}")
 
-            # Step 2: Resize to fit within chosen target resolution while preserving aspect ratio
-            target_w, target_h = self.target_res
+            # 2. Resize to fit within chosen target resolution while preserving aspect ratio
             src_h, src_w = restored.shape[:2]
-            scale = min(target_w / src_w, target_h / src_h)
-            out_w = max(1, int(src_w * scale))
-            out_h = max(1, int(src_h * scale))
+            out_w, out_h = self._calculate_output_size(src_w, src_h)
+
             if out_w != src_w or out_h != src_h:
                 final = cv2.resize(restored, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
             else:
                 final = restored
 
+            # 3. Save the final image
             out_path = self.output_folder / f"upscaled_{file.stem}_{out_w}x{out_h}{file.suffix}"
             cv2.imwrite(str(out_path), final)
 
@@ -283,14 +310,108 @@ class AnimeUpscaler:
             # Include type + message for easier debugging
             self.log(f"[ERROR] Error processing {file.name}: {type(e).__name__}: {e}")
 
+    def _upscale_video(self, video_path: Path):
+        """Upscale a single video file to target resolution."""
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            self.log(f"[ERROR] Failed to open video: {video_path.name}")
+            return
+
+        writer = None
+        try:
+            # Ensure model loaded in the same thread as this call
+            if self.upsampler is None:
+                self.log("[INFO] Loading model (this may take a while)...")
+                self._load_model()
+                self.log("[INFO] Model loaded.")
+
+            # Get video properties
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.log(f"[INFO] Input Video: {video_path.name} ({frame_width}x{frame_height}, {fps:.2f} FPS, {frame_count} frames)")
+
+            # Calculate the constant output resolution based on the 4x size and target size
+            # 4x upscaled frame size:
+            src_w, src_h = frame_width * 4, frame_height * 4 
+            out_w, out_h = self._calculate_output_size(src_w, src_h)
+
+            # Output path and setup (always save as MP4 for compatibility)
+            out_name = f"upscaled_{video_path.stem}_{out_w}x{out_h}.mp4"
+            out_path = self.output_folder / out_name
+            
+            # Codec setup (MP4V for MP4 container - widely supported by OpenCV installations)
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+            
+            writer = cv2.VideoWriter(str(out_path), fourcc, fps, (out_w, out_h))
+            if not writer.isOpened():
+                # On many systems, the 'mp4v' codec might fail if FFMPEG is not installed correctly.
+                # Try a fallback like 'XVID' which is often more reliable.
+                self.log("[WARNING] Failed to open video writer with 'mp4v'. Trying 'XVID'...")
+                fourcc_fallback = cv2.VideoWriter_fourcc(*'XVID')
+                writer = cv2.VideoWriter(str(out_path), fourcc_fallback, fps, (out_w, out_h))
+                
+                if not writer.isOpened():
+                    self.log(f"[ERROR] Failed to open video writer for: {out_path} using 'mp4v' or 'XVID'. Check OpenCV/FFMPEG installation.")
+                    cap.release()
+                    return
+
+            self.log(f"[INFO] Output Video: {out_path} ({out_w}x{out_h}, {fps:.2f} FPS). Starting frame processing...")
+
+            processed_frames = 0
+            # Redirect stdout/stderr to the GUI logger during enhancement
+            stream = StreamToLogger(self.log)
+            
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # 1. Upscale 4x with RealESRGAN
+                with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
+                    # restored is 4x the input frame size
+                    restored, _ = self.upsampler.enhance(frame, outscale=4)
+
+                # 2. Resize the 4x upscaled result (restored) to the constant calculated size (out_w, out_h)
+                final = cv2.resize(restored, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+                
+                writer.write(final)
+                processed_frames += 1
+
+                if processed_frames % 50 == 0 or processed_frames == frame_count:
+                    self.log(f"[PROGRESS] Processed frame {processed_frames}/{frame_count}")
+
+            self.log(f"[SUCCESS] Video processing complete. Total frames written: {processed_frames}")
+            self.log(f"[SUCCESS] Saved: {out_path}")
+
+        except Exception as e:
+            # Include type + message for easier debugging
+            self.log(f"[ERROR] Error processing video {video_path.name}: {type(e).__name__}: {e}")
+        finally:
+            # Always release resources
+            if cap and cap.isOpened():
+                cap.release()
+            if writer and writer.isOpened():
+                writer.release()
+
+
     def _upscale_folder(self, folder: Path):
-        """Upscale all supported images in a folder."""
+        """Upscale all supported images and videos in a folder."""
         processed = 0
         for file in folder.iterdir():
-            if file.suffix.lower() in self.SUPPORTED_FORMATS:
-                self._upscale_file(file)
-                processed += 1
-        self.log(f"[SUCCESS] Completed! {processed} image(s) processed.")
+            suffix = file.suffix.lower()
+            if suffix in self.SUPPORTED_FORMATS:
+                # Use the unified upscale method which handles file type internally
+                try:
+                    self.upscale() 
+                    processed += 1
+                except Exception as e:
+                    self.log(f"[ERROR] Failed to process {file.name} in folder: {e}")
+            else:
+                self.log(f"[WARNING] Skipped unsupported file in folder: {file.name}")
+                
+        self.log(f"[SUCCESS] Completed! {processed} file(s) processed from folder.")
 
 
 class UpscaleWorker(QObject):
@@ -314,7 +435,6 @@ class UpscaleWorker(QObject):
         try:
             # gui_logger will run in the worker thread but emits Qt signals which are thread-safe
             def gui_logger(text: str):
-                # keep messages short and consistent
                 self.logged.emit(text)
 
             total = len(self.input_files)
@@ -324,13 +444,15 @@ class UpscaleWorker(QObject):
                 return
 
             for idx, input_file in enumerate(self.input_files, start=1):
-                # Header for each image
-                self.logged.emit(f"[IMAGE] Processing {idx}/{total}: {input_file.name}")
+                # Header for each file
+                self.logged.emit(f"[FILE] Processing {idx}/{total}: {input_file.name}")
 
                 if not input_file.exists():
                     self.logged.emit(f"[ERROR] File not found: {input_file}")
                     continue
-                if input_file.suffix.lower() not in AnimeUpscaler.SUPPORTED_FORMATS:
+                
+                suffix = input_file.suffix.lower()
+                if suffix not in AnimeUpscaler.SUPPORTED_FORMATS:
                     self.logged.emit(f"[WARNING] Unsupported format, skipping: {input_file.name}")
                     continue
 
@@ -343,13 +465,17 @@ class UpscaleWorker(QObject):
                         tile_pad=self.tile_pad,
                         logger=gui_logger,
                     )
-
-                    # Process this single file (will log its own details)
-                    upscaler._upscale_file(input_file)
-                    self.logged.emit(f"[IMAGE] Completed {idx}/{total}: {input_file.name}")
+                    
+                    # Call the appropriate method based on file type
+                    if suffix in AnimeUpscaler.SUPPORTED_IMAGE_FORMATS:
+                        upscaler._upscale_file(input_file)
+                    elif suffix in AnimeUpscaler.SUPPORTED_VIDEO_FORMATS:
+                        upscaler._upscale_video(input_file)
+                    
+                    self.logged.emit(f"[FILE] Completed {idx}/{total}: {input_file.name}")
 
                 except Exception as e:
-                    # Per-image error should not stop the rest of the batch
+                    # Per-file error should not stop the rest of the batch
                     self.errored.emit(f"{type(e).__name__}: {e}")
                     self.logged.emit(f"[ERROR] Failed to process {input_file.name}, continuing with next.")
 
@@ -365,12 +491,13 @@ class UpscaleWorker(QObject):
 class AnimeUpscalerApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Anime Image Upscaler")
+        self.setWindowTitle("Anime Media Upscaler (Image & Video)")
         self.setFixedSize(600, 600)
         self.worker_thread: QThread | None = None
         self.worker: UpscaleWorker | None = None
         self._build_ui()
         self._apply_dark_style()
+        self._show_startup_warning()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -378,7 +505,7 @@ class AnimeUpscalerApp(QWidget):
         layout.setSpacing(10)
 
         # Header
-        header = QLabel("Anime Image Upscaler")
+        header = QLabel("Anime Media Upscaler (Image & Video)")
         header.setObjectName("HeaderLabel")
         layout.addWidget(header)
 
@@ -387,9 +514,9 @@ class AnimeUpscalerApp(QWidget):
 
         # Input file
         row_in = QHBoxLayout()
-        row_in.addWidget(QLabel("Input Image(s):"))
+        row_in.addWidget(QLabel("Input Media:"))
         self.in_edit = QLineEdit()
-        self.in_edit.setPlaceholderText("Select one or more image files (separated internally)")
+        self.in_edit.setPlaceholderText("Select one or more image/video files (separated internally)")
         row_in.addWidget(self.in_edit)
         self.browse_in_btn = QPushButton("Browse")
         self.browse_in_btn.clicked.connect(self._on_browse_input)
@@ -413,7 +540,7 @@ class AnimeUpscalerApp(QWidget):
         settings_group = QGroupBox("Settings")
         settings_layout = QHBoxLayout(settings_group)
 
-        settings_layout.addWidget(QLabel("Resolution:"))
+        settings_layout.addWidget(QLabel("Max Resolution:"))
         self.res_combo = QComboBox()
         # Map label to resolution tuple
         self.label_to_res = {}
@@ -422,12 +549,17 @@ class AnimeUpscalerApp(QWidget):
             self.res_combo.addItem(label)
             self.label_to_res[label] = (w, h)
         settings_layout.addWidget(self.res_combo)
+        
+        # Add warning for video processing time
+        note = QLabel("Note: Video processing is significantly slower.")
+        note.setStyleSheet("color: orange;")
+        settings_layout.addWidget(note)
 
         layout.addWidget(settings_group)
 
         # Controls
         controls = QHBoxLayout()
-        self.start_btn = QPushButton("Start")
+        self.start_btn = QPushButton("Start Upscaling")
         self.start_btn.clicked.connect(self._on_start)
         controls.addWidget(self.start_btn)
         layout.addLayout(controls)
@@ -459,11 +591,12 @@ class AnimeUpscalerApp(QWidget):
     def _show_startup_warning(self):
         QMessageBox.warning(
             self,
-            "Important Notice",
+            "Important Notice: Video Support",
             (
-                "This tool works best for anime-style images.\n\n"
-                "Selecting extremely high resolutions (e.g., 16K/32K/64K) may cause crashes\n"
-                "due to high memory usage, especially without a powerful GPU."
+                "This tool now supports both image and video upscaling (anime style).\n\n"
+                "1. **Video Codec:** The output video is saved as MP4 (using 'mp4v' or 'XVID' codec). If you encounter errors, your OpenCV/FFMPEG installation may lack the necessary codecs.\n"
+                "2. **Performance:** Upscaling video is extremely slow, as every frame is processed.\n"
+                "3. **Memory:** Selecting very high resolutions (e.g., 16K/32K/64K) may still cause crashes due to high memory usage, especially for large image frames or video frames."
             ),
         )
 
@@ -473,11 +606,13 @@ class AnimeUpscalerApp(QWidget):
 
     @Slot()
     def _on_browse_input(self):
+        # Update the filter string to include video formats
+        filter_str = "Media Files (*.png *.jpg *.jpeg *.bmp; *.mp4 *.avi *.mkv *.mov)"
         files, _ = QFileDialog.getOpenFileNames(
             self,
-            "Select One or More Input Images",
+            "Select One or More Input Images or Videos",
             str(Path.cwd()),
-            "Images (*.png *.jpg *.jpeg *.bmp)",
+            filter_str,
         )
         if files:
             # Store multiple file paths separated by ;
@@ -494,7 +629,7 @@ class AnimeUpscalerApp(QWidget):
         input_path = self.in_edit.text().strip()
         output_folder = self.out_edit.text().strip()
         if not input_path:
-            self._append_log("[ERROR] Please select at least one input image.")
+            self._append_log("[ERROR] Please select at least one input file (image or video).")
             return
         if not output_folder:
             self._append_log("[ERROR] Please select an output folder.")
@@ -510,7 +645,7 @@ class AnimeUpscalerApp(QWidget):
         # Parse multiple files (semicolon-separated)
         input_files = [p.strip() for p in input_path.split(";") if p.strip()]
         if not input_files:
-            self._append_log("[ERROR] No valid image files found in the input field.")
+            self._append_log("[ERROR] No valid image or video files found in the input field.")
             return
 
         # Disable UI while running
@@ -519,7 +654,7 @@ class AnimeUpscalerApp(QWidget):
         self.browse_out_btn.setEnabled(False)
         self.res_combo.setEnabled(False)
         self.log_view.clear()
-        self._append_log("Starting upscaling...")
+        self._append_log("Starting media upscaling batch...")
 
         # Create worker + thread and move worker to that thread
         self.worker_thread = QThread()
@@ -565,7 +700,12 @@ class AnimeUpscalerApp(QWidget):
 
 
 if __name__ == "__main__":
-    app = QApplication([])
+    # Ensure a QApplication instance is available for PySide6
+    if not QApplication.instance():
+        app = QApplication(sys.argv)
+    else:
+        app = QApplication.instance()
+        
     w = AnimeUpscalerApp()
     w.show()
-    app.exec()
+    sys.exit(app.exec())
