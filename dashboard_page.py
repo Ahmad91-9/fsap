@@ -217,22 +217,51 @@ class DashboardPage(StyledWidget):
         # Store launcher manager reference
         self.launcher_manager = launcher_manager
         
+        # Sidebar state
+        self.sidebar_visible = False
+        self.sidebar_width = 280
+        
         self.init_ui()
         self.setup_loading_overlay()
 
     def init_ui(self):
-        layout = QVBoxLayout()
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
         # Header
         header = QWidget()
+        header.setStyleSheet("background-color: #2D2D30; padding: 10px;")
+        header.setFixedHeight(60)
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setContentsMargins(15, 0, 15, 0)
+        header_layout.setSpacing(15)
+
+        # Hamburger menu button
+        self.menu_btn = QPushButton("☰")
+        self.menu_btn.setFixedSize(40, 40)
+        self.menu_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3E3E42;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #4E4E52;
+            }
+            QPushButton:pressed {
+                background-color: #5E5E62;
+            }
+        """)
+        self.menu_btn.clicked.connect(self.toggle_sidebar)
+        header_layout.addWidget(self.menu_btn)
 
         # Title
         title = QLabel("Dashboard")
-        title.setStyleSheet("font-size: 24px; font-weight: bold;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: white;")
         header_layout.addWidget(title)
 
         header_layout.addStretch()
@@ -240,49 +269,111 @@ class DashboardPage(StyledWidget):
         # Logout button
         logout_btn = QPushButton("Logout")
         logout_btn.setMinimumHeight(40)
+        logout_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #D32F2F;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #C62828;
+            }
+            QPushButton:pressed {
+                background-color: #B71C1C;
+            }
+        """)
         logout_btn.clicked.connect(lambda: self.logout.emit())
         header_layout.addWidget(logout_btn)
 
-        layout.addWidget(header)
+        main_layout.addWidget(header)
 
-        # Create horizontal layout for account and version details
-        info_sections_layout = QHBoxLayout()
-        info_sections_layout.setSpacing(20)
+        # Create main content area with sidebar and downloaders
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(0)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Create sidebar
+        self.sidebar = QWidget()
+        self.sidebar.setStyleSheet("""
+            QWidget {
+                background-color: #252526;
+                border-right: 1px solid #3E3E42;
+            }
+        """)
+        
+        self.sidebar_scroll = QScrollArea()
+        self.sidebar_scroll.setWidget(self.sidebar)
+        self.sidebar_scroll.setWidgetResizable(True)
+        self.sidebar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.sidebar_scroll.setFixedWidth(0)  # Initially hidden
+        self.sidebar_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: #252526;
+            }
+            QScrollBar:vertical {
+                background-color: #1E1E1E;
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #3E3E42;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #4E4E52;
+            }
+        """)
+        
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setSpacing(15)
+        sidebar_layout.setContentsMargins(15, 15, 15, 15)
 
         # User info container (Account Details)
         user_info_container = QWidget()
         user_info_container.setStyleSheet("""
             QWidget {
                 background-color: #3E3E42;
-                border-radius: 4px;
-                padding: 5px;
+                border-radius: 6px;
+                padding: 10px;
             }
         """)
         user_info_layout = QVBoxLayout(user_info_container)
+        user_info_layout.setSpacing(8)
+
+        # Account Details title
+        account_title = QLabel("Account Details")
+        account_title.setStyleSheet("font-size: 16px; font-weight: bold; color: white; margin-bottom: 5px;")
+        user_info_layout.addWidget(account_title)
 
         # User info labels
         self.email_label = QLabel("")
-        self.email_label.setStyleSheet("font-size: 14px;")
+        self.email_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
         user_info_layout.addWidget(self.email_label)
 
         self.username_label = QLabel("")
-        self.username_label.setStyleSheet("font-size: 14px;")
+        self.username_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
         user_info_layout.addWidget(self.username_label)
 
         self.membership_label = QLabel("")
-        self.membership_label.setStyleSheet("font-size: 14px;")
+        self.membership_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
         user_info_layout.addWidget(self.membership_label)
 
         # Membership time remaining label
         self.membership_time_label = QLabel("")
-        self.membership_time_label.setStyleSheet("font-size: 14px; color: #FF9800;")
+        self.membership_time_label.setStyleSheet("font-size: 13px; color: #FF9800; font-weight: bold;")
         user_info_layout.addWidget(self.membership_time_label)
 
-        # Referral information display removed to avoid attribute errors
+        sidebar_layout.addWidget(user_info_container)
 
         # Referral details button
         self.referral_btn = QPushButton("View Referral Details")
-        self.referral_btn.setMinimumHeight(35)
+        self.referral_btn.setMinimumHeight(40)
         self.referral_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -291,7 +382,6 @@ class DashboardPage(StyledWidget):
                 border-radius: 5px;
                 font-size: 14px;
                 font-weight: bold;
-                margin: 5px 0;
             }
             QPushButton:hover {
                 background-color: #1976D2;
@@ -301,11 +391,11 @@ class DashboardPage(StyledWidget):
             }
         """)
         self.referral_btn.clicked.connect(self.open_referral_details)
-        user_info_layout.addWidget(self.referral_btn)
+        sidebar_layout.addWidget(self.referral_btn)
         
         # Calculate Rewards button
         self.calculate_rewards_btn = QPushButton("Calculate Rewards")
-        self.calculate_rewards_btn.setMinimumHeight(35)
+        self.calculate_rewards_btn.setMinimumHeight(40)
         self.calculate_rewards_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FF9800;
@@ -314,7 +404,6 @@ class DashboardPage(StyledWidget):
                 border-radius: 5px;
                 font-size: 14px;
                 font-weight: bold;
-                margin: 5px 0;
             }
             QPushButton:hover {
                 background-color: #F57C00;
@@ -324,25 +413,23 @@ class DashboardPage(StyledWidget):
             }
         """)
         self.calculate_rewards_btn.clicked.connect(self.open_rewards_window)
-        user_info_layout.addWidget(self.calculate_rewards_btn)
-
-        # Add user info container to horizontal layout
-        info_sections_layout.addWidget(user_info_container)
+        sidebar_layout.addWidget(self.calculate_rewards_btn)
 
         # Version details container
         version_info_container = QWidget()
         version_info_container.setStyleSheet("""
             QWidget {
                 background-color: #3E3E42;
-                border-radius: 4px;
-                padding: 5px;
+                border-radius: 6px;
+                padding: 10px;
             }
         """)
         version_info_layout = QVBoxLayout(version_info_container)
+        version_info_layout.setSpacing(8)
 
         # Version title
         version_title = QLabel("Version Details")
-        version_title.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        version_title.setStyleSheet("font-size: 16px; font-weight: bold; color: white; margin-bottom: 5px;")
         version_info_layout.addWidget(version_title)
 
         # Version labels
@@ -354,17 +441,16 @@ class DashboardPage(StyledWidget):
             app_version = "Unknown"
         
         self.app_version_label = QLabel(f"App Version: {app_version}")
-        self.app_version_label.setStyleSheet("font-size: 14px;")
+        self.app_version_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
         version_info_layout.addWidget(self.app_version_label)
 
         self.build_date_label = QLabel("Build Date: November 2025")
-        self.build_date_label.setStyleSheet("font-size: 14px;")
+        self.build_date_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
         version_info_layout.addWidget(self.build_date_label)
-
 
         # Check for update button
         self.check_update_btn = QPushButton("Check for Update")
-        self.check_update_btn.setMinimumHeight(35)
+        self.check_update_btn.setMinimumHeight(40)
         self.check_update_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -373,7 +459,7 @@ class DashboardPage(StyledWidget):
                 border-radius: 5px;
                 font-size: 14px;
                 font-weight: bold;
-                margin-top: 10px;
+                margin-top: 5px;
             }
             QPushButton:hover {
                 background-color: #45A049;
@@ -385,19 +471,21 @@ class DashboardPage(StyledWidget):
         self.check_update_btn.clicked.connect(self.check_for_updates)
         version_info_layout.addWidget(self.check_update_btn)
 
-        # Add stretch to align content to top
-        version_info_layout.addStretch()
+        sidebar_layout.addWidget(version_info_container)
+        sidebar_layout.addStretch()
 
-        # Add version info container to horizontal layout
-        info_sections_layout.addWidget(version_info_container)
+        content_layout.addWidget(self.sidebar_scroll, 0)
 
-        # Add the horizontal layout to main layout
-        layout.addLayout(info_sections_layout)
+        # Main content area for downloaders
+        main_content = QWidget()
+        main_content_layout = QVBoxLayout(main_content)
+        main_content_layout.setSpacing(15)
+        main_content_layout.setContentsMargins(15, 15, 15, 15)
 
         # Media Downloaders section title
         downloaders_title = QLabel("Media Downloaders")
-        downloaders_title.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; margin-bottom: 15px;")
-        layout.addWidget(downloaders_title)
+        downloaders_title.setStyleSheet("font-size: 20px; font-weight: bold; color: white; margin-bottom: 10px;")
+        main_content_layout.addWidget(downloaders_title)
 
         # Create tab widget for downloaders
         self.downloader_tabs = QTabWidget()
@@ -438,9 +526,23 @@ class DashboardPage(StyledWidget):
         self.downloader_tabs.addTab(BandcampWidget(ffmpeg_location, self), "Bandcamp")
         self.downloader_tabs.addTab(YouTubeDownloaderGUI(), "YouTube")
 
-        layout.addWidget(self.downloader_tabs)
-        layout.addStretch()
-        self.setLayout(layout)
+        main_content_layout.addWidget(self.downloader_tabs)
+
+        content_layout.addWidget(main_content, 1)
+
+        main_layout.addLayout(content_layout)
+        self.setLayout(main_layout)
+    
+    def toggle_sidebar(self):
+        """Toggle sidebar visibility"""
+        if self.sidebar_visible:
+            # Hide sidebar
+            self.sidebar_scroll.setFixedWidth(0)
+            self.sidebar_visible = False
+        else:
+            # Show sidebar
+            self.sidebar_scroll.setFixedWidth(self.sidebar_width)
+            self.sidebar_visible = True
     
     def discover_ffmpeg_location(self) -> str | None:
         """Attempt to find ffmpeg next to this script. Returns a string path or None if not found."""
