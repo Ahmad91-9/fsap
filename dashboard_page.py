@@ -436,7 +436,7 @@ class DashboardPage(StyledWidget):
         self.downloader_tabs.addTab(TwitchWidget(ffmpeg_location, self), "Twitch")
         self.downloader_tabs.addTab(RedditWidget(ffmpeg_location, self), "Reddit")
         self.downloader_tabs.addTab(BandcampWidget(ffmpeg_location, self), "Bandcamp")
-        self.downloader_tabs.addTab(YouTubeDownloaderGUI(self), "YouTube")
+        self.downloader_tabs.addTab(YouTubeDownloaderGUI(), "YouTube")
 
         layout.addWidget(self.downloader_tabs)
         layout.addStretch()
