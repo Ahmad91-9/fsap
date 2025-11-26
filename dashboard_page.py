@@ -291,13 +291,14 @@ class DashboardPage(StyledWidget):
 
         main_layout.addWidget(header)
 
-        # Create main content area with sidebar and downloaders
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(0)
-        content_layout.setContentsMargins(0, 0, 0, 0)
+        # Create container widget for content area (sidebar will overlay this)
+        content_container = QWidget()
+        content_container_layout = QVBoxLayout(content_container)
+        content_container_layout.setSpacing(0)
+        content_container_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Create sidebar
-        self.sidebar = QWidget()
+        # Create sidebar (will overlay the main content)
+        self.sidebar = QWidget(content_container)  # Parent is content_container for overlay
         self.sidebar.setStyleSheet("""
             QWidget {
                 background-color: #252526;
@@ -305,11 +306,12 @@ class DashboardPage(StyledWidget):
             }
         """)
         
-        self.sidebar_scroll = QScrollArea()
+        self.sidebar_scroll = QScrollArea(content_container)  # Parent is content_container for overlay
         self.sidebar_scroll.setWidget(self.sidebar)
         self.sidebar_scroll.setWidgetResizable(True)
         self.sidebar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.sidebar_scroll.setFixedWidth(0)  # Initially hidden
+        self.sidebar_scroll.setFixedHeight(0)  # Will be set to match parent height
         self.sidebar_scroll.setStyleSheet("""
             QScrollArea {
                 border: none;
@@ -329,6 +331,8 @@ class DashboardPage(StyledWidget):
                 background-color: #4E4E52;
             }
         """)
+        # Raise sidebar to appear on top
+        self.sidebar_scroll.raise_()
         
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setSpacing(15)
@@ -474,9 +478,7 @@ class DashboardPage(StyledWidget):
         sidebar_layout.addWidget(version_info_container)
         sidebar_layout.addStretch()
 
-        content_layout.addWidget(self.sidebar_scroll, 0)
-
-        # Main content area for downloaders
+        # Main content area for downloaders (scrollable)
         main_content = QWidget()
         main_content_layout = QVBoxLayout(main_content)
         main_content_layout.setSpacing(15)
@@ -527,22 +529,70 @@ class DashboardPage(StyledWidget):
         self.downloader_tabs.addTab(YouTubeDownloaderGUI(), "YouTube")
 
         main_content_layout.addWidget(self.downloader_tabs)
+        main_content_layout.addStretch()
 
-        content_layout.addWidget(main_content, 1)
+        # Wrap main content in scroll area for vertical scrolling
+        main_content_scroll = QScrollArea()
+        main_content_scroll.setWidget(main_content)
+        main_content_scroll.setWidgetResizable(True)
+        main_content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        main_content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        main_content_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                background-color: #1E1E1E;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #3E3E42;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #4E4E52;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
 
-        main_layout.addLayout(content_layout)
+        # Add scrollable main content to container
+        content_container_layout.addWidget(main_content_scroll)
+
+        # Add container to main layout
+        main_layout.addWidget(content_container)
         self.setLayout(main_layout)
+        
+        # Store references for positioning
+        self.content_container = content_container
     
     def toggle_sidebar(self):
         """Toggle sidebar visibility"""
         if self.sidebar_visible:
             # Hide sidebar
             self.sidebar_scroll.setFixedWidth(0)
+            self.sidebar_scroll.setFixedHeight(0)
+            self.sidebar_scroll.lower()  # Lower it when hidden
             self.sidebar_visible = False
         else:
-            # Show sidebar
-            self.sidebar_scroll.setFixedWidth(self.sidebar_width)
+            # Show sidebar - overlay on top of content
+            self.sidebar_scroll.raise_()  # Raise to top first
+            # Use QTimer to ensure container has proper size
+            QTimer.singleShot(10, self._position_sidebar)
             self.sidebar_visible = True
+    
+    def _position_sidebar(self):
+        """Position sidebar after widget is shown"""
+        if self.sidebar_visible and hasattr(self, 'content_container'):
+            container_height = self.content_container.height()
+            self.sidebar_scroll.setFixedWidth(self.sidebar_width)
+            self.sidebar_scroll.setFixedHeight(container_height if container_height > 0 else self.height())
+            self.sidebar_scroll.move(0, 0)
+            self.sidebar_scroll.raise_()  # Ensure it's on top
     
     def discover_ffmpeg_location(self) -> str | None:
         """Attempt to find ffmpeg next to this script. Returns a string path or None if not found."""
@@ -565,10 +615,17 @@ class DashboardPage(StyledWidget):
         self.loading_timeout.setSingleShot(True)
     
     def resizeEvent(self, event):
-        """Handle resize events to properly position loading overlay"""
+        """Handle resize events to properly position loading overlay and sidebar"""
         super().resizeEvent(event)
+        # Handle loading overlay
         if self.loading_overlay:
             self.loading_overlay.resize(self.size())
+        # Handle sidebar positioning when visible
+        if hasattr(self, 'content_container') and self.sidebar_visible:
+            container_height = self.content_container.height()
+            self.sidebar_scroll.setFixedHeight(container_height)
+            self.sidebar_scroll.move(0, 0)
+            self.sidebar_scroll.raise_()
     
     def on_app_clicked(self, name: str, url_or_path: str, is_local: bool):
         """Launch app using universal app launcher with window detection popup."""
