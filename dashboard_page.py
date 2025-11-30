@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QVBoxLayout, QLabel, QPushButton, QWidget, QHBoxLayout, QMessageBox, QMainWindow, QGridLayout, QScrollArea, QSizePolicy, QDialog, QApplication, QTabWidget
+from PySide6.QtWidgets import QVBoxLayout, QLabel, QPushButton, QWidget, QHBoxLayout, QMessageBox, QMainWindow, QGridLayout, QScrollArea, QSizePolicy, QDialog, QApplication
 from PySide6.QtCore import Qt, Signal, QTimer, QThread, QObject, QMetaObject
 from datetime import datetime
 import os
@@ -7,7 +7,6 @@ import subprocess
 import threading
 import time
 import psutil
-from pathlib import Path
 try:
     import pygetwindow as gw
 except ImportError:
@@ -20,16 +19,6 @@ from referral_details_window import ReferralDetailsWindow
 from rewards_window import RewardsWindow
 from workers import ReferralSyncWorker
 from utils import debug_log
-from downloaders.instagram import InstagramWidget
-from downloaders.facebook import FacebookWidget
-from downloaders.tiktok import TikTokWidget
-from downloaders.dailymotion import DailymotionWidget
-from downloaders.soundcloud import SoundCloudWidget
-from downloaders.vimeo import VimeoWidget
-from downloaders.twitch import TwitchWidget
-from downloaders.reddit import RedditWidget
-from downloaders.bandcamp import BandcampWidget
-from youtube_downloader_gui_patched_fixed_corrected import YouTubeDownloaderGUI
 
 class PopupWindow(QDialog):
     """Standalone popup window for app launching."""
@@ -217,51 +206,22 @@ class DashboardPage(StyledWidget):
         # Store launcher manager reference
         self.launcher_manager = launcher_manager
         
-        # Sidebar state
-        self.sidebar_visible = False
-        self.sidebar_width = 280
-        
         self.init_ui()
         self.setup_loading_overlay()
 
     def init_ui(self):
-        main_layout = QVBoxLayout()
-        main_layout.setSpacing(0)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        layout = QVBoxLayout()
+        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
 
         # Header
         header = QWidget()
-        header.setStyleSheet("background-color: #2D2D30; padding: 10px;")
-        header.setFixedHeight(60)
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(15, 0, 15, 0)
-        header_layout.setSpacing(15)
-
-        # Hamburger menu button
-        self.menu_btn = QPushButton("☰")
-        self.menu_btn.setFixedSize(40, 40)
-        self.menu_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3E3E42;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                font-size: 20px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #4E4E52;
-            }
-            QPushButton:pressed {
-                background-color: #5E5E62;
-            }
-        """)
-        self.menu_btn.clicked.connect(self.toggle_sidebar)
-        header_layout.addWidget(self.menu_btn)
+        header_layout.setContentsMargins(0, 0, 0, 0)
 
         # Title
         title = QLabel("Dashboard")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: white;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold;")
         header_layout.addWidget(title)
 
         header_layout.addStretch()
@@ -269,115 +229,49 @@ class DashboardPage(StyledWidget):
         # Logout button
         logout_btn = QPushButton("Logout")
         logout_btn.setMinimumHeight(40)
-        logout_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #D32F2F;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 8px 16px;
-            }
-            QPushButton:hover {
-                background-color: #C62828;
-            }
-            QPushButton:pressed {
-                background-color: #B71C1C;
-            }
-        """)
         logout_btn.clicked.connect(lambda: self.logout.emit())
         header_layout.addWidget(logout_btn)
 
-        main_layout.addWidget(header)
+        layout.addWidget(header)
 
-        # Create container widget for content area (sidebar will overlay this)
-        content_container = QWidget()
-        content_container_layout = QVBoxLayout(content_container)
-        content_container_layout.setSpacing(0)
-        content_container_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Create sidebar (will overlay the main content)
-        self.sidebar = QWidget(content_container)  # Parent is content_container for overlay
-        self.sidebar.setStyleSheet("""
-            QWidget {
-                background-color: #252526;
-                border-right: 1px solid #3E3E42;
-            }
-        """)
-        
-        self.sidebar_scroll = QScrollArea(content_container)  # Parent is content_container for overlay
-        self.sidebar_scroll.setWidget(self.sidebar)
-        self.sidebar_scroll.setWidgetResizable(True)
-        self.sidebar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.sidebar_scroll.setFixedWidth(0)  # Initially hidden
-        self.sidebar_scroll.setFixedHeight(0)  # Will be set to match parent height
-        self.sidebar_scroll.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: #252526;
-            }
-            QScrollBar:vertical {
-                background-color: #1E1E1E;
-                width: 8px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #3E3E42;
-                border-radius: 4px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #4E4E52;
-            }
-        """)
-        # Raise sidebar to appear on top
-        self.sidebar_scroll.raise_()
-        
-        sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setSpacing(15)
-        sidebar_layout.setContentsMargins(15, 15, 15, 15)
+        # Create horizontal layout for account and version details
+        info_sections_layout = QHBoxLayout()
+        info_sections_layout.setSpacing(20)
 
         # User info container (Account Details)
         user_info_container = QWidget()
         user_info_container.setStyleSheet("""
             QWidget {
                 background-color: #3E3E42;
-                border-radius: 6px;
-                padding: 10px;
+                border-radius: 4px;
+                padding: 5px;
             }
         """)
         user_info_layout = QVBoxLayout(user_info_container)
-        user_info_layout.setSpacing(8)
-
-        # Account Details title
-        account_title = QLabel("Account Details")
-        account_title.setStyleSheet("font-size: 16px; font-weight: bold; color: white; margin-bottom: 5px;")
-        user_info_layout.addWidget(account_title)
 
         # User info labels
         self.email_label = QLabel("")
-        self.email_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
+        self.email_label.setStyleSheet("font-size: 14px;")
         user_info_layout.addWidget(self.email_label)
 
         self.username_label = QLabel("")
-        self.username_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
+        self.username_label.setStyleSheet("font-size: 14px;")
         user_info_layout.addWidget(self.username_label)
 
         self.membership_label = QLabel("")
-        self.membership_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
+        self.membership_label.setStyleSheet("font-size: 14px;")
         user_info_layout.addWidget(self.membership_label)
 
         # Membership time remaining label
         self.membership_time_label = QLabel("")
-        self.membership_time_label.setStyleSheet("font-size: 13px; color: #FF9800; font-weight: bold;")
+        self.membership_time_label.setStyleSheet("font-size: 14px; color: #FF9800;")
         user_info_layout.addWidget(self.membership_time_label)
 
-        sidebar_layout.addWidget(user_info_container)
+        # Referral information display removed to avoid attribute errors
 
         # Referral details button
         self.referral_btn = QPushButton("View Referral Details")
-        self.referral_btn.setMinimumHeight(40)
+        self.referral_btn.setMinimumHeight(35)
         self.referral_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -386,6 +280,7 @@ class DashboardPage(StyledWidget):
                 border-radius: 5px;
                 font-size: 14px;
                 font-weight: bold;
+                margin: 5px 0;
             }
             QPushButton:hover {
                 background-color: #1976D2;
@@ -395,11 +290,11 @@ class DashboardPage(StyledWidget):
             }
         """)
         self.referral_btn.clicked.connect(self.open_referral_details)
-        sidebar_layout.addWidget(self.referral_btn)
+        user_info_layout.addWidget(self.referral_btn)
         
         # Calculate Rewards button
         self.calculate_rewards_btn = QPushButton("Calculate Rewards")
-        self.calculate_rewards_btn.setMinimumHeight(40)
+        self.calculate_rewards_btn.setMinimumHeight(35)
         self.calculate_rewards_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FF9800;
@@ -408,6 +303,7 @@ class DashboardPage(StyledWidget):
                 border-radius: 5px;
                 font-size: 14px;
                 font-weight: bold;
+                margin: 5px 0;
             }
             QPushButton:hover {
                 background-color: #F57C00;
@@ -417,23 +313,25 @@ class DashboardPage(StyledWidget):
             }
         """)
         self.calculate_rewards_btn.clicked.connect(self.open_rewards_window)
-        sidebar_layout.addWidget(self.calculate_rewards_btn)
+        user_info_layout.addWidget(self.calculate_rewards_btn)
+
+        # Add user info container to horizontal layout
+        info_sections_layout.addWidget(user_info_container)
 
         # Version details container
         version_info_container = QWidget()
         version_info_container.setStyleSheet("""
             QWidget {
                 background-color: #3E3E42;
-                border-radius: 6px;
-                padding: 10px;
+                border-radius: 4px;
+                padding: 5px;
             }
         """)
         version_info_layout = QVBoxLayout(version_info_container)
-        version_info_layout.setSpacing(8)
 
         # Version title
         version_title = QLabel("Version Details")
-        version_title.setStyleSheet("font-size: 16px; font-weight: bold; color: white; margin-bottom: 5px;")
+        version_title.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
         version_info_layout.addWidget(version_title)
 
         # Version labels
@@ -445,16 +343,17 @@ class DashboardPage(StyledWidget):
             app_version = "Unknown"
         
         self.app_version_label = QLabel(f"App Version: {app_version}")
-        self.app_version_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
+        self.app_version_label.setStyleSheet("font-size: 14px;")
         version_info_layout.addWidget(self.app_version_label)
 
         self.build_date_label = QLabel("Build Date: November 2025")
-        self.build_date_label.setStyleSheet("font-size: 13px; color: #CCCCCC;")
+        self.build_date_label.setStyleSheet("font-size: 14px;")
         version_info_layout.addWidget(self.build_date_label)
+
 
         # Check for update button
         self.check_update_btn = QPushButton("Check for Update")
-        self.check_update_btn.setMinimumHeight(40)
+        self.check_update_btn.setMinimumHeight(35)
         self.check_update_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -463,7 +362,7 @@ class DashboardPage(StyledWidget):
                 border-radius: 5px;
                 font-size: 14px;
                 font-weight: bold;
-                margin-top: 5px;
+                margin-top: 10px;
             }
             QPushButton:hover {
                 background-color: #45A049;
@@ -475,136 +374,148 @@ class DashboardPage(StyledWidget):
         self.check_update_btn.clicked.connect(self.check_for_updates)
         version_info_layout.addWidget(self.check_update_btn)
 
-        sidebar_layout.addWidget(version_info_container)
-        sidebar_layout.addStretch()
+        # Add stretch to align content to top
+        version_info_layout.addStretch()
 
-        # Main content area for downloaders (scrollable)
-        main_content = QWidget()
-        main_content_layout = QVBoxLayout(main_content)
-        main_content_layout.setSpacing(15)
-        main_content_layout.setContentsMargins(15, 15, 15, 15)
+        # Add version info container to horizontal layout
+        info_sections_layout.addWidget(version_info_container)
 
-        # Media Downloaders section title
-        downloaders_title = QLabel("Media Downloaders")
-        downloaders_title.setStyleSheet("font-size: 20px; font-weight: bold; color: white; margin-bottom: 10px;")
-        main_content_layout.addWidget(downloaders_title)
+        # Add the horizontal layout to main layout
+        layout.addLayout(info_sections_layout)
 
-        # Create tab widget for downloaders
-        self.downloader_tabs = QTabWidget()
-        self.downloader_tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #2c3448;
-                border-radius: 6px;
-                background-color: #1E1E1E;
-            }
-            QTabBar::tab {
-                background: #2D2D30;
-                color: #d0d6e2;
-                padding: 8px 14px;
-                margin: 2px;
-                border-radius: 4px;
-            }
-            QTabBar::tab:selected {
-                background: #3E3E42;
-                color: #ffffff;
-            }
-            QTabBar::tab:hover {
-                background: #4E4E52;
-            }
-        """)
+        # Apps section title
+        apps_title = QLabel("Available Applications")
+        apps_title.setStyleSheet("font-size: 18px; font-weight: bold; margin-top: 10px; margin-bottom: 15px;")
+        layout.addWidget(apps_title)
 
-        # Discover ffmpeg location
-        ffmpeg_location = self.discover_ffmpeg_location()
-
-        # Add downloader tabs
-        self.downloader_tabs.addTab(InstagramWidget(ffmpeg_location, self), "Instagram")
-        self.downloader_tabs.addTab(FacebookWidget(ffmpeg_location, self), "Facebook")
-        self.downloader_tabs.addTab(TikTokWidget(ffmpeg_location, self), "TikTok")
-        self.downloader_tabs.addTab(DailymotionWidget(ffmpeg_location, self), "Dailymotion")
-        self.downloader_tabs.addTab(SoundCloudWidget(ffmpeg_location, self), "SoundCloud")
-        self.downloader_tabs.addTab(VimeoWidget(ffmpeg_location, self), "Vimeo")
-        self.downloader_tabs.addTab(TwitchWidget(ffmpeg_location, self), "Twitch")
-        self.downloader_tabs.addTab(RedditWidget(ffmpeg_location, self), "Reddit")
-        self.downloader_tabs.addTab(BandcampWidget(ffmpeg_location, self), "Bandcamp")
-        self.downloader_tabs.addTab(YouTubeDownloaderGUI(), "YouTube")
-
-        main_content_layout.addWidget(self.downloader_tabs)
-        main_content_layout.addStretch()
-
-        # Wrap main content in scroll area for vertical scrolling
-        main_content_scroll = QScrollArea()
-        main_content_scroll.setWidget(main_content)
-        main_content_scroll.setWidgetResizable(True)
-        main_content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        main_content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        main_content_scroll.setStyleSheet("""
+        # Create scrollable area for apps
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setStyleSheet("""
             QScrollArea {
                 border: none;
                 background-color: transparent;
             }
             QScrollBar:vertical {
-                background-color: #1E1E1E;
+                background-color: #2D2D30;
                 width: 12px;
                 border-radius: 6px;
             }
             QScrollBar::handle:vertical {
-                background-color: #3E3E42;
+                background-color: #4E4E52;
                 border-radius: 6px;
                 min-height: 20px;
             }
             QScrollBar::handle:vertical:hover {
-                background-color: #4E4E52;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
+                background-color: #5E5E62;
             }
         """)
 
-        # Add scrollable main content to container
-        content_container_layout.addWidget(main_content_scroll)
+        # Create scrollable content widget
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Add container to main layout
-        main_layout.addWidget(content_container)
-        self.setLayout(main_layout)
+        # Apps grid with horizontal layout
+        grid = QVBoxLayout()
+        grid.setSpacing(5)  # Minimal spacing between rows
         
-        # Store references for positioning
-        self.content_container = content_container
-    
-    def toggle_sidebar(self):
-        """Toggle sidebar visibility"""
-        if self.sidebar_visible:
-            # Hide sidebar
-            self.sidebar_scroll.setFixedWidth(0)
-            self.sidebar_scroll.setFixedHeight(0)
-            self.sidebar_scroll.lower()  # Lower it when hidden
-            self.sidebar_visible = False
-        else:
-            # Show sidebar - overlay on top of content
-            self.sidebar_scroll.raise_()  # Raise to top first
-            # Use QTimer to ensure container has proper size
-            QTimer.singleShot(10, self._position_sidebar)
-            self.sidebar_visible = True
-    
-    def _position_sidebar(self):
-        """Position sidebar after widget is shown"""
-        if self.sidebar_visible and hasattr(self, 'content_container'):
-            container_height = self.content_container.height()
-            self.sidebar_scroll.setFixedWidth(self.sidebar_width)
-            self.sidebar_scroll.setFixedHeight(container_height if container_height > 0 else self.height())
-            self.sidebar_scroll.move(0, 0)
-            self.sidebar_scroll.raise_()  # Ensure it's on top
-    
-    def discover_ffmpeg_location(self) -> str | None:
-        """Attempt to find ffmpeg next to this script. Returns a string path or None if not found."""
-        app_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)).resolve()
-        candidates = [
-            app_dir / "ffmpeg.exe",  # Windows common
-            app_dir / "ffmpeg",      # Unix-like
-        ]
-        for p in candidates:
-            if p.exists():
-                return str(p.parent)
-        return None
+        # Build app entries from config.py
+        app_entries = []
+        
+        # Add local apps from config.py
+        for name, icon, path in LOCAL_APPS:
+            app_entries.append((name, path, True))
+        
+        # Add GitHub apps from config.py
+        for name, icon, url in GITHUB_APPS:
+            app_entries.append((name, url, False))
+
+        for name, url_or_path, is_local in app_entries:
+            cell_widget = QWidget()
+            cell_widget.setFixedHeight(125)  # Increased height to accommodate larger images
+            cell_widget.setStyleSheet("""
+                QWidget {
+                    background-color: #3E3E42;
+                    border-radius: 8px;
+                    padding: 8px;
+                    margin: 2px;
+                }
+                QWidget:hover {
+                    background-color: #4E4E52;
+                    border: 2px solid #2196F3;
+                }
+            """)
+            
+            # Horizontal layout for each app
+            cell_layout = QHBoxLayout(cell_widget)
+            cell_layout.setContentsMargins(10, 5, 10, 5)
+            cell_layout.setSpacing(15)  # Minimal spacing between elements
+
+            # App icon - Left side, larger
+            img_label = QLabel()
+            img_label.setFixedSize(130, 100)  # Increased from 60x60 to 80x80
+            
+            # Load icon using config.py get_app_icon function
+            # Find the icon data for this app
+            icon_data = ""
+            for app_name, app_icon, app_path in LOCAL_APPS + GITHUB_APPS:
+                if app_name == name:
+                    icon_data = app_icon
+                    break
+            
+            pix = get_app_icon(icon_data)
+            
+            if not pix.isNull():
+                img_label.setPixmap(pix.scaled(130, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            else:
+                img_label.setText("[No Image]")
+                img_label.setAlignment(Qt.AlignCenter)
+                img_label.setStyleSheet("font-size: 14px; color: #CCCCCC;")
+            cell_layout.addWidget(img_label)
+
+            # App name - Center, takes remaining space
+            name_label = QLabel(name)
+            name_label.setAlignment(Qt.AlignCenter)
+            name_label.setStyleSheet("font-weight: bold; font-size: 16px; color: white;")
+            name_label.setWordWrap(True)
+            name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            cell_layout.addWidget(name_label)
+
+            # Launch button - Right side, larger
+            btn = QPushButton("Launch")
+            btn.setFixedSize(120, 50)  # Fixed size for consistency
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 16px;
+                font-weight: bold;
+                    padding: 10px;
+                }
+                QPushButton:hover {
+                    background-color: #1976D2;
+                }
+                QPushButton:pressed {
+                    background-color: #1565C0;
+                }
+            """)
+            btn.clicked.connect(lambda checked, n=name, u=url_or_path, l=is_local: self.on_app_clicked(n, u, l))
+            cell_layout.addWidget(btn)
+
+            grid.addWidget(cell_widget)
+
+        scroll_layout.addLayout(grid)
+        scroll_layout.addStretch()  # Add stretch to push content to top
+        
+        scroll_area.setWidget(scroll_content)
+        layout.addWidget(scroll_area)
+        layout.addStretch()
+        self.setLayout(layout)
     
     def setup_loading_overlay(self):
         """Set up the loading overlay for this page"""
@@ -615,17 +526,10 @@ class DashboardPage(StyledWidget):
         self.loading_timeout.setSingleShot(True)
     
     def resizeEvent(self, event):
-        """Handle resize events to properly position loading overlay and sidebar"""
+        """Handle resize events to properly position loading overlay"""
         super().resizeEvent(event)
-        # Handle loading overlay
         if self.loading_overlay:
             self.loading_overlay.resize(self.size())
-        # Handle sidebar positioning when visible
-        if hasattr(self, 'content_container') and self.sidebar_visible:
-            container_height = self.content_container.height()
-            self.sidebar_scroll.setFixedHeight(container_height)
-            self.sidebar_scroll.move(0, 0)
-            self.sidebar_scroll.raise_()
     
     def on_app_clicked(self, name: str, url_or_path: str, is_local: bool):
         """Launch app using universal app launcher with window detection popup."""
